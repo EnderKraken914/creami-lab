@@ -1463,8 +1463,8 @@ function RecipeDetail({
       <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-4 sm:p-5">
         <div className="flex min-w-0 flex-col gap-5 xl:flex-row">
           <div className="min-w-0 flex-1">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
+            <div className="mb-4 flex min-w-0 flex-col gap-3">
+              <div className="min-w-0">
                 <p className="text-sm text-[var(--muted)]">
                   {categoryText(recipe)}
                 </p>
@@ -1477,9 +1477,9 @@ function RecipeDetail({
                   )}
                 </div>
               </div>
-              <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+              <div className="flex w-full flex-wrap gap-2">
                 <button
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--amber)] sm:flex-none"
+                  className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--amber)] sm:flex-none"
                   onClick={onNewVersion}
                   title="Create a new version"
                   type="button"
@@ -1488,7 +1488,7 @@ function RecipeDetail({
                   New version
                 </button>
                 <button
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)] sm:flex-none"
+                  className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)] sm:flex-none"
                   onClick={onEdit}
                   title="Edit recipe"
                   type="button"
@@ -1497,7 +1497,7 @@ function RecipeDetail({
                   Edit
                 </button>
                 <button
-                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[#5c353a] px-3 text-sm text-[#ffd5dc] transition hover:border-[var(--berry)] sm:flex-none"
+                  className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[#5c353a] px-3 text-sm text-[#ffd5dc] transition hover:border-[var(--berry)] sm:flex-none"
                   onClick={onDelete}
                   title="Delete recipe"
                   type="button"
