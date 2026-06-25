@@ -39,7 +39,6 @@ type RecipeForm = {
   instructionsText: string;
   creami_setting: string;
   mix_ins: string;
-  family_rating: string;
   notes: string;
   tagsText: string;
   photo_before_url: string;
@@ -57,6 +56,8 @@ type ReviewForm = {
   notes: string;
 };
 
+type RecipeFieldPatch = Omit<Partial<Recipe>, "family_rating">;
+
 const LOCAL_STORAGE_KEY = "creami-lab-recipes-v2";
 const LOCAL_STORAGE_REVIEWS_KEY = "creami-lab-reviews-v1";
 const STAR_VALUES = [1, 2, 3, 4, 5] as const;
@@ -70,7 +71,6 @@ const emptyForm: RecipeForm = {
   instructionsText: "",
   creami_setting: "",
   mix_ins: "",
-  family_rating: "",
   notes: "",
   tagsText: "",
   photo_before_url: "",
@@ -321,8 +321,6 @@ function toForm(recipe: Recipe): RecipeForm {
     instructionsText: recipe.instructions.join("\n"),
     creami_setting: recipe.creami_setting,
     mix_ins: recipe.mix_ins,
-    family_rating:
-      recipe.family_rating === null ? "" : String(recipe.family_rating),
     notes: recipe.notes,
     tagsText: recipe.tags.join(", "),
     photo_before_url: recipe.photo_before_url ?? "",
@@ -346,8 +344,6 @@ function formToPayload(form: RecipeForm) {
     instructions: splitLines(form.instructionsText),
     creami_setting: form.creami_setting.trim(),
     mix_ins: form.mix_ins.trim(),
-    family_rating:
-      form.family_rating === "" ? null : Number(form.family_rating),
     notes: form.notes.trim(),
     tags: normalizeTags(form.tagsText),
     photo_before_url: form.photo_before_url.trim() || null,
@@ -513,14 +509,6 @@ export default function RecipeWorkspace() {
     );
   }, [categoryFilter, query, recipes, tagFilter]);
 
-  const ratedRecipes = recipes.filter(
-    (recipe): recipe is Recipe & { family_rating: number } =>
-      recipe.family_rating !== null,
-  );
-  const averageRating = ratedRecipes.length
-    ? ratedRecipes.reduce((sum, recipe) => sum + recipe.family_rating, 0) /
-      ratedRecipes.length
-    : null;
   const reviewedRecipes = recipes.filter((recipe) =>
     reviews.some((review) => review.recipe_id === recipe.id),
   );
@@ -655,7 +643,6 @@ export default function RecipeWorkspace() {
       id: undefined,
       slug: null,
       built_in: false,
-      family_rating: "",
       last_made: "",
       notes: "",
       photo_after_path: "",
@@ -681,14 +668,14 @@ export default function RecipeWorkspace() {
     setNotice("");
 
     const payload = formToPayload(editing);
+    const existingRecipe = recipes.find((recipe) => recipe.id === editing.id);
 
     if (!supabase) {
       const savedRecipe: Recipe = {
         id: editing.id ?? crypto.randomUUID(),
-        created_at:
-          recipes.find((recipe) => recipe.id === editing.id)?.created_at ??
-          now(),
+        created_at: existingRecipe?.created_at ?? now(),
         updated_at: now(),
+        family_rating: existingRecipe?.family_rating ?? null,
         ...payload,
       };
 
@@ -745,7 +732,7 @@ export default function RecipeWorkspace() {
 
   async function updateRecipeFields(
     recipeId: string,
-    fields: Partial<Recipe>,
+    fields: RecipeFieldPatch,
     successMessage: string,
   ) {
     setBusy(recipeId);
@@ -902,7 +889,7 @@ export default function RecipeWorkspace() {
         {
           [`photo_${stage}_url`]: publicUrl,
           [`photo_${stage}_path`]: path,
-        } as Partial<Recipe>,
+        } as RecipeFieldPatch,
         `${stage === "before" ? "Before" : "After"} photo saved.`,
       );
     } catch (photoError) {
@@ -932,7 +919,7 @@ export default function RecipeWorkspace() {
       {
         [`photo_${stage}_url`]: null,
         [`photo_${stage}_path`]: null,
-      } as Partial<Recipe>,
+      } as RecipeFieldPatch,
       `${stage === "before" ? "Before" : "After"} photo removed.`,
     );
   }
@@ -1006,7 +993,7 @@ export default function RecipeWorkspace() {
                 Home
               </Link>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-[720px] sm:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-[620px] sm:grid-cols-5">
               <Metric label="Recipes" value={String(recipes.length)} />
               <Metric
                 label="Built in"
@@ -1017,17 +1004,11 @@ export default function RecipeWorkspace() {
               <Metric label="Version sets" value={String(versionSetCount)} />
               <Metric label="Reviewed" value={String(reviewedRecipes.length)} />
               <Metric
-                label="Visitor avg"
+                label="Avg rating"
                 value={
                   visitorAverageRating === null
                     ? "None"
                     : formatRatingValue(visitorAverageRating)
-                }
-              />
-              <Metric
-                label="Family avg"
-                value={
-                  averageRating === null ? "None" : averageRating.toFixed(1)
                 }
               />
             </div>
@@ -1190,13 +1171,6 @@ export default function RecipeWorkspace() {
                 onDelete={() => deleteRecipe(selectedRecipe)}
                 onEdit={() => startEditing(selectedRecipe)}
                 onNewVersion={() => startNewVersion(selectedRecipe)}
-                onRate={(rating) =>
-                  updateRecipeFields(
-                    selectedRecipe.id,
-                    { family_rating: rating },
-                    "Rating saved.",
-                  )
-                }
                 onRemovePhoto={(stage) => removePhoto(selectedRecipe, stage)}
                 onReviewChange={setReviewForm}
                 onReviewSubmit={submitReview}
@@ -1284,7 +1258,7 @@ function StarRatingControl({
 }) {
   return (
     <div
-      aria-label="Rating from family"
+      aria-label="Star rating"
       className="flex items-center gap-1"
       role="radiogroup"
     >
@@ -1324,7 +1298,7 @@ function Rating({
 }) {
   if (value === null) {
     return (
-      <span className="text-xs text-[var(--muted)]" title="No family rating">
+      <span className="text-xs text-[var(--muted)]" title="No rating">
         Not rated
       </span>
     );
@@ -1458,7 +1432,6 @@ function RecipeDetail({
   onDelete,
   onEdit,
   onNewVersion,
-  onRate,
   onRemovePhoto,
   onReviewChange,
   onReviewSubmit,
@@ -1474,7 +1447,6 @@ function RecipeDetail({
   onDelete: () => void;
   onEdit: () => void;
   onNewVersion: () => void;
-  onRate: (rating: number) => void;
   onRemovePhoto: (stage: "before" | "after") => void;
   onReviewChange: (form: ReviewForm) => void;
   onReviewSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1539,21 +1511,15 @@ function RecipeDetail({
                 </button>
               </div>
             </div>
-            <div className="grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-5">
+            <div className="grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-4">
               <span>Setting: {recipe.creami_setting || "Not logged"}</span>
               <span>Last made: {formatOptionalDate(recipe.last_made)}</span>
               <span>Version: {versionSummary(recipe)}</span>
               <span>
-                Visitor avg:{" "}
+                Rating:{" "}
                 {reviewAverage === null
                   ? "No reviews"
                   : `${formatRatingValue(reviewAverage)}/5 (${reviews.length})`}
-              </span>
-              <span>
-                Family:{" "}
-                {recipe.family_rating === null
-                  ? "Not rated"
-                  : `${recipe.family_rating}/5`}
               </span>
             </div>
             <TagRow tags={recipe.tags} />
@@ -1604,17 +1570,15 @@ function RecipeDetail({
         <InfoPanel onEdit={onEdit} title="Last made">
           <p>{formatOptionalDate(recipe.last_made)}</p>
         </InfoPanel>
-        <InfoPanel onEdit={onEdit} title="Family rating">
+        <InfoPanel title="Recipe rating">
           <div className="flex flex-wrap items-center gap-3">
-            <StarRatingControl
-              disabled={busy === recipe.id}
-              onRate={onRate}
-              value={recipe.family_rating}
-            />
+            <Rating value={reviewAverage} />
             <span className="text-xs text-[var(--muted)]">
-              {recipe.family_rating === null
-                ? "Not rated"
-                : `${recipe.family_rating}/5`}
+              {reviewAverage === null
+                ? "No reviews yet"
+                : `${formatRatingValue(reviewAverage)}/5 from ${
+                    reviews.length
+                  } review${reviews.length === 1 ? "" : "s"}`}
             </span>
           </div>
         </InfoPanel>
@@ -1873,21 +1837,23 @@ function InfoPanel({
   title,
 }: {
   children: React.ReactNode;
-  onEdit: () => void;
+  onEdit?: () => void;
   title: string;
 }) {
   return (
     <article className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-[var(--mint)]">{title}</h3>
-        <button
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--mint)] hover:text-[var(--foreground)]"
-          onClick={onEdit}
-          title={`Edit ${title}`}
-          type="button"
-        >
-          <Edit3 size={14} aria-hidden="true" />
-        </button>
+        {onEdit && (
+          <button
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--mint)] hover:text-[var(--foreground)]"
+            onClick={onEdit}
+            title={`Edit ${title}`}
+            type="button"
+          >
+            <Edit3 size={14} aria-hidden="true" />
+          </button>
+        )}
       </div>
       <div className="text-sm leading-6 text-[#ddd9cf]">{children}</div>
     </article>
@@ -1917,17 +1883,36 @@ function StepList({ items }: { items: string[] }) {
   }
 
   return (
-    <ol className="space-y-2">
-      {items.map((item, index) => (
-        <li className="flex gap-3" key={`${item}-${index}`}>
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--line)] text-xs text-[var(--mint)]">
-            {index + 1}
-          </span>
-          <span>{item}</span>
-        </li>
-      ))}
-    </ol>
+    <ul className="space-y-2">
+      {items.map((item, index) => {
+        const numberedStep = parseNumberedInstruction(item);
+
+        return (
+          <li className="flex gap-3" key={`${item}-${index}`}>
+            {numberedStep && (
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--line)] text-xs text-[var(--mint)]">
+                {numberedStep.number}
+              </span>
+            )}
+            <span>{numberedStep?.text ?? item}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
+}
+
+function parseNumberedInstruction(item: string) {
+  const match = item.match(/^\s*(\d+)\.(?!\d)\s*(.*)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    number: match[1],
+    text: match[2].trim(),
+  };
 }
 
 function RecipeEditor({
@@ -2049,26 +2034,6 @@ function RecipeEditor({
             value={form.creami_setting}
           />
         </Field>
-        <Field label="Rating from family">
-          <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-[var(--line)] bg-[#0f1311] px-2 py-1">
-            <StarRatingControl
-              disabled={busy}
-              onRate={(rating) => update("family_rating", String(rating))}
-              value={normalizeRating(form.family_rating)}
-            />
-            {form.family_rating && (
-              <button
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--berry)] hover:text-[#ffd5dc]"
-                onClick={() => update("family_rating", "")}
-                title="Clear rating"
-                type="button"
-              >
-                <X size={15} aria-hidden="true" />
-                <span className="sr-only">Clear rating</span>
-              </button>
-            )}
-          </div>
-        </Field>
         <Field label="Ingredients, one per line">
           <textarea
             className="min-h-44 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
@@ -2076,7 +2041,7 @@ function RecipeEditor({
             value={form.ingredientsText}
           />
         </Field>
-        <Field label="Instructions, one ordered step per line">
+        <Field label="Instructions, one per line">
           <textarea
             className="min-h-44 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
             onChange={(event) => update("instructionsText", event.target.value)}
