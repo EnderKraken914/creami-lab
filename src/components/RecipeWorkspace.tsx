@@ -965,13 +965,13 @@ export default function RecipeWorkspace() {
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <section className="border-b border-[var(--line)] bg-[#101411]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 sm:px-8 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-3">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between lg:px-8">
+          <div className="min-w-0 space-y-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--panel)] text-[var(--mint)]">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[var(--line)] bg-[var(--panel)] text-[var(--mint)]">
                 <ChefHat size={22} aria-hidden="true" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm text-[var(--muted)]">Pint notebook</p>
                 <h1 className="text-3xl font-semibold tracking-normal sm:text-4xl">
                   Creami Lab
@@ -984,7 +984,7 @@ export default function RecipeWorkspace() {
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <div className="flex justify-start lg:justify-end">
               <Link
                 className="inline-flex h-9 items-center rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)]"
@@ -993,7 +993,7 @@ export default function RecipeWorkspace() {
                 Home
               </Link>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-[620px] sm:grid-cols-5">
+            <div className="grid min-w-0 grid-cols-2 gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
               <Metric label="Recipes" value={String(recipes.length)} />
               <Metric
                 label="Built in"
@@ -1016,9 +1016,9 @@ export default function RecipeWorkspace() {
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-5 sm:px-8 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="space-y-4">
-          <div className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-4">
+      <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)] gap-4 px-3 py-4 sm:px-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-5 lg:px-8 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="min-w-0 space-y-4">
+          <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-3 sm:p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-base font-semibold">Recipes</h2>
               <button
@@ -1091,18 +1091,18 @@ export default function RecipeWorkspace() {
                 const recipeReviews = reviewsForRecipe(reviews, recipe.id);
 
                 return (
-                <button
-                  className={`w-full rounded-md border p-4 text-left transition ${
-                    selectedRecipe?.id === recipe.id
-                      ? "border-[var(--mint)] bg-[var(--panel-strong)]"
-                      : "border-[var(--line)] bg-[var(--panel)] hover:border-[#53625a]"
-                  }`}
-                  key={recipe.id}
-                  onClick={() => selectRecipe(recipe.id)}
-                  type="button"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                  <button
+                    className={`w-full min-w-0 rounded-md border p-3 text-left transition sm:p-4 ${
+                      selectedRecipe?.id === recipe.id
+                        ? "border-[var(--mint)] bg-[var(--panel-strong)]"
+                        : "border-[var(--line)] bg-[var(--panel)] hover:border-[#53625a]"
+                    }`}
+                    key={recipe.id}
+                    onClick={() => selectRecipe(recipe.id)}
+                    type="button"
+                  >
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
                       <div className="flex min-w-0 items-center gap-2">
                         <h3 className="truncate text-sm font-semibold">
                           {recipe.name}
@@ -1142,7 +1142,7 @@ export default function RecipeWorkspace() {
           </div>
         </aside>
 
-        <section className="space-y-5">
+        <section className="min-w-0 space-y-5">
           {(notice || error || !supabase) && (
             <div
               className={`rounded-md border px-4 py-3 text-sm ${
@@ -1221,9 +1221,9 @@ export default function RecipeWorkspace() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
+    <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] px-3 py-3 sm:px-4">
       <p className="text-xs text-[var(--muted)]">{label}</p>
-      <p className="mt-1 text-xl font-semibold">{value}</p>
+      <p className="mt-1 truncate text-lg font-semibold sm:text-xl">{value}</p>
     </div>
   );
 }
@@ -1346,7 +1346,7 @@ function VisitorRatingSummary({
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex shrink-0 flex-col items-end gap-1 text-right">
       <Rating value={average} compact={compact} />
       <span className="text-xs text-[var(--muted)]">
         {formatRatingValue(average)} avg ({count})
@@ -1365,14 +1365,14 @@ function CreamiOfTheDayCard({
   recipe: Recipe;
 }) {
   return (
-    <div className="rounded-md border border-[#4b5136] bg-[#171912] p-5">
+    <div className="min-w-0 rounded-md border border-[#4b5136] bg-[#171912] p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--amber)]">
             <Sparkles size={16} aria-hidden="true" />
             Creami of the Day
           </div>
-          <h2 className="text-2xl font-semibold tracking-normal">
+          <h2 className="break-words text-xl font-semibold tracking-normal sm:text-2xl">
             {recipe.name}
           </h2>
           {recipe.version_group && (
@@ -1385,7 +1385,7 @@ function CreamiOfTheDayCard({
           </p>
           <TagRow tags={recipe.tags.slice(0, 5)} />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <button
             className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)]"
             onClick={onSelect}
@@ -1414,10 +1414,10 @@ function TagRow({ tags }: { tags: string[] }) {
   }
 
   return (
-    <div className="mt-3 flex flex-wrap gap-1.5">
+    <div className="mt-3 flex min-w-0 flex-wrap gap-1.5">
       {tags.map((tag) => (
         <span
-          className="rounded-md border border-[#3b463f] bg-[#101411] px-2 py-1 text-xs text-[var(--muted)]"
+          className="max-w-full break-words rounded-md border border-[#3b463f] bg-[#101411] px-2 py-1 text-xs text-[var(--muted)]"
           key={tag}
         >
           {tag}
@@ -1463,16 +1463,16 @@ function RecipeDetail({
 }) {
   return (
     <div className="space-y-5">
-      <div className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-5">
-        <div className="flex flex-col gap-5 xl:flex-row">
+      <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-4 sm:p-5">
+        <div className="flex min-w-0 flex-col gap-5 xl:flex-row">
           <div className="min-w-0 flex-1">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm text-[var(--muted)]">
                   {categoryText(recipe)}
                 </p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <h2 className="text-3xl font-semibold tracking-normal">
+                  <h2 className="min-w-0 break-words text-2xl font-semibold tracking-normal sm:text-3xl">
                     {recipe.name}
                   </h2>
                   {recipe.version_label && (
@@ -1481,9 +1481,9 @@ function RecipeDetail({
                   {recipe.built_in && <BuiltInBadge />}
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
                 <button
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--amber)]"
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--amber)] sm:flex-none"
                   onClick={onNewVersion}
                   title="Create a new version"
                   type="button"
@@ -1492,7 +1492,7 @@ function RecipeDetail({
                   New version
                 </button>
                 <button
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)]"
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)] sm:flex-none"
                   onClick={onEdit}
                   title="Edit recipe"
                   type="button"
@@ -1501,7 +1501,7 @@ function RecipeDetail({
                   Edit
                 </button>
                 <button
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-[#5c353a] px-3 text-sm text-[#ffd5dc] transition hover:border-[var(--berry)]"
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[#5c353a] px-3 text-sm text-[#ffd5dc] transition hover:border-[var(--berry)] sm:flex-none"
                   onClick={onDelete}
                   title="Delete recipe"
                   type="button"
@@ -1511,7 +1511,7 @@ function RecipeDetail({
                 </button>
               </div>
             </div>
-            <div className="grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-4">
+            <div className="grid min-w-0 gap-2 text-sm text-[var(--muted)] sm:grid-cols-2 xl:grid-cols-4">
               <span>Setting: {recipe.creami_setting || "Not logged"}</span>
               <span>Last made: {formatOptionalDate(recipe.last_made)}</span>
               <span>Version: {versionSummary(recipe)}</span>
@@ -1525,7 +1525,7 @@ function RecipeDetail({
             <TagRow tags={recipe.tags} />
           </div>
 
-          <div className="grid flex-1 gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
             <PhotoSlot
               busy={busy === `${recipe.id}-before` || busy === recipe.id}
               imageUrl={recipe.photo_before_url}
@@ -1544,7 +1544,7 @@ function RecipeDetail({
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-2">
         <InfoPanel onEdit={onEdit} title="Ingredients">
           <ItemList items={recipe.ingredients} />
         </InfoPanel>
@@ -1612,13 +1612,13 @@ function VersionList({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       {recipes.map((recipe) => {
         const isCurrent = recipe.id === currentRecipeId;
 
         return (
           <button
-            className={`w-full rounded-md border px-3 py-2 text-left transition ${
+            className={`w-full min-w-0 rounded-md border px-3 py-2 text-left transition ${
               isCurrent
                 ? "border-[var(--amber)] bg-[#171912]"
                 : "border-[var(--line)] bg-[#101411] hover:border-[#53625a]"
@@ -1628,8 +1628,10 @@ function VersionList({
             onClick={() => onSelect(recipe.id)}
             type="button"
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-medium">{recipe.name}</span>
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+              <span className="min-w-0 break-words font-medium">
+                {recipe.name}
+              </span>
               {recipe.version_label && <VersionBadge label={recipe.version_label} />}
             </div>
             <p className="mt-1 text-xs text-[var(--muted)]">
@@ -1658,9 +1660,9 @@ function ReviewPanel({
   reviews: RecipeReview[];
 }) {
   return (
-    <article className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-4 xl:col-span-2">
+    <article className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-3 sm:p-4 xl:col-span-2">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold text-[var(--mint)]">
             Visitor reviews
           </h3>
@@ -1680,16 +1682,16 @@ function ReviewPanel({
       </div>
 
       <form
-        className="grid gap-3 rounded-md border border-[#28322d] bg-[#101411] p-3 md:grid-cols-[1fr_auto]"
+        className="grid min-w-0 gap-3 rounded-md border border-[#28322d] bg-[#101411] p-3 md:grid-cols-[minmax(0,1fr)_auto]"
         onSubmit={onSubmit}
       >
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid min-w-0 gap-3 md:grid-cols-2">
           <label className="space-y-2">
             <span className="block text-sm font-medium text-[var(--muted)]">
               Your name
             </span>
             <input
-              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+              className="h-10 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
               onChange={(event) =>
                 onChange({ ...form, reviewer_name: event.target.value })
               }
@@ -1701,7 +1703,7 @@ function ReviewPanel({
             <span className="block text-sm font-medium text-[var(--muted)]">
               Your rating
             </span>
-            <div className="flex min-h-10 items-center rounded-md border border-[var(--line)] bg-[#0f1311] px-1">
+            <div className="flex min-h-10 min-w-0 items-center overflow-x-auto rounded-md border border-[var(--line)] bg-[#0f1311] px-1">
               <StarRatingControl
                 disabled={busy}
                 onRate={(rating) => onChange({ ...form, rating: String(rating) })}
@@ -1714,7 +1716,7 @@ function ReviewPanel({
               Review notes
             </span>
             <textarea
-              className="min-h-20 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
+              className="min-h-20 w-full min-w-0 resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
               onChange={(event) =>
                 onChange({ ...form, notes: event.target.value })
               }
@@ -1739,12 +1741,12 @@ function ReviewPanel({
         {reviews.length ? (
           reviews.map((review) => (
             <article
-              className="rounded-md border border-[#28322d] bg-[#101411] p-3"
+              className="min-w-0 rounded-md border border-[#28322d] bg-[#101411] p-3"
               key={review.id}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h4 className="text-sm font-semibold">
+                <div className="min-w-0 break-words">
+                  <h4 className="break-words text-sm font-semibold">
                     {review.reviewer_name}
                   </h4>
                   <p className="mt-1 text-xs text-[var(--muted)]">
@@ -1753,7 +1755,7 @@ function ReviewPanel({
                 </div>
                 <Rating value={review.rating} compact />
               </div>
-              <p className="mt-3 text-sm leading-6 text-[#ddd9cf]">
+              <p className="mt-3 break-words text-sm leading-6 text-[#ddd9cf]">
                 {review.notes || "No notes left."}
               </p>
             </article>
@@ -1782,9 +1784,9 @@ function PhotoSlot({
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <div className="rounded-md border border-[var(--line)] bg-[#101411] p-3">
+    <div className="min-w-0 rounded-md border border-[var(--line)] bg-[#101411] p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-medium">
+        <div className="min-w-0 break-words flex items-center gap-2 text-sm font-medium">
           <Camera size={15} className="text-[var(--mint)]" aria-hidden="true" />
           {label}
         </div>
@@ -1841,9 +1843,11 @@ function InfoPanel({
   title: string;
 }) {
   return (
-    <article className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-4">
+    <article className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-3 sm:p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-[var(--mint)]">{title}</h3>
+        <h3 className="min-w-0 break-words text-sm font-semibold text-[var(--mint)]">
+          {title}
+        </h3>
         {onEdit && (
           <button
             className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--mint)] hover:text-[var(--foreground)]"
@@ -1855,7 +1859,9 @@ function InfoPanel({
           </button>
         )}
       </div>
-      <div className="text-sm leading-6 text-[#ddd9cf]">{children}</div>
+      <div className="min-w-0 break-words text-sm leading-6 text-[#ddd9cf]">
+        {children}
+      </div>
     </article>
   );
 }
@@ -1868,9 +1874,9 @@ function ItemList({ items }: { items: string[] }) {
   return (
     <ul className="space-y-1">
       {items.map((item, index) => (
-        <li className="flex gap-2" key={`${item}-${index}`}>
+        <li className="flex min-w-0 gap-2" key={`${item}-${index}`}>
           <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--mint)]" />
-          <span>{item}</span>
+          <span className="min-w-0 break-words">{item}</span>
         </li>
       ))}
     </ul>
@@ -1888,13 +1894,15 @@ function StepList({ items }: { items: string[] }) {
         const numberedStep = parseNumberedInstruction(item);
 
         return (
-          <li className="flex gap-3" key={`${item}-${index}`}>
+          <li className="flex min-w-0 gap-3" key={`${item}-${index}`}>
             {numberedStep && (
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--line)] text-xs text-[var(--mint)]">
                 {numberedStep.number}
               </span>
             )}
-            <span>{numberedStep?.text ?? item}</span>
+            <span className="min-w-0 break-words">
+              {numberedStep?.text ?? item}
+            </span>
           </li>
         );
       })}
@@ -1934,22 +1942,22 @@ function RecipeEditor({
 
   return (
     <form
-      className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-5"
+      className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-4 sm:p-5"
       onSubmit={onSubmit}
     >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-[var(--muted)]">Edit recipe</p>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-2xl font-semibold">
+            <h2 className="min-w-0 break-words text-xl font-semibold sm:text-2xl">
               {form.id ? form.name : "New Creami Pint"}
             </h2>
             {form.built_in && <BuiltInBadge />}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex w-full gap-2 sm:w-auto">
           <button
-            className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--berry)]"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--berry)] sm:flex-none"
             onClick={onCancel}
             type="button"
           >
@@ -1957,7 +1965,7 @@ function RecipeEditor({
             Cancel
           </button>
           <button
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--mint)] px-4 text-sm font-semibold text-[#10201a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-[var(--mint)] px-4 text-sm font-semibold text-[#10201a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
             disabled={busy}
             type="submit"
           >
@@ -1967,10 +1975,10 @@ function RecipeEditor({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-2">
         <Field label="Recipe name">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) => update("name", event.target.value)}
             required
             value={form.name}
@@ -1978,7 +1986,7 @@ function RecipeEditor({
         </Field>
         <Field label="Version family">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) => update("version_group", event.target.value)}
             placeholder="Banana Fudge Swirl"
             value={form.version_group}
@@ -1986,7 +1994,7 @@ function RecipeEditor({
         </Field>
         <Field label="Version label">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) => update("version_label", event.target.value)}
             placeholder="v2 or Banana Split Edition"
             value={form.version_label}
@@ -1994,7 +2002,7 @@ function RecipeEditor({
         </Field>
         <Field label="Version notes">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) => update("version_notes", event.target.value)}
             placeholder="more fudge"
             value={form.version_notes}
@@ -2002,7 +2010,7 @@ function RecipeEditor({
         </Field>
         <Field label="Category">
           <select
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) =>
               update(
                 "minor_category_slug",
@@ -2026,7 +2034,7 @@ function RecipeEditor({
         </Field>
         <Field label="Creami setting used">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) =>
               update("creami_setting", event.target.value)
             }
@@ -2036,28 +2044,28 @@ function RecipeEditor({
         </Field>
         <Field label="Ingredients, one per line">
           <textarea
-            className="min-h-44 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
+            className="min-h-44 w-full min-w-0 resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
             onChange={(event) => update("ingredientsText", event.target.value)}
             value={form.ingredientsText}
           />
         </Field>
         <Field label="Instructions, one per line">
           <textarea
-            className="min-h-44 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
+            className="min-h-44 w-full min-w-0 resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
             onChange={(event) => update("instructionsText", event.target.value)}
             value={form.instructionsText}
           />
         </Field>
         <Field label="Mix-ins">
           <textarea
-            className="min-h-24 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
+            className="min-h-24 w-full min-w-0 resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
             onChange={(event) => update("mix_ins", event.target.value)}
             value={form.mix_ins}
           />
         </Field>
         <Field label="Notes">
           <textarea
-            className="min-h-24 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
+            className="min-h-24 w-full min-w-0 resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
             onChange={(event) => update("notes", event.target.value)}
             placeholder='Dad said tastes like real kulfi'
             value={form.notes}
@@ -2065,7 +2073,7 @@ function RecipeEditor({
         </Field>
         <Field label="Last made">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) => update("last_made", event.target.value)}
             type="date"
             value={form.last_made}
@@ -2073,7 +2081,7 @@ function RecipeEditor({
         </Field>
         <Field label="Tags">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) => update("tagsText", event.target.value)}
             placeholder="mango, gelato, kulfi, fudge swirl"
             value={form.tagsText}
@@ -2081,7 +2089,7 @@ function RecipeEditor({
         </Field>
         <Field label="Before photo URL">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) =>
               update("photo_before_url", event.target.value)
             }
@@ -2090,7 +2098,7 @@ function RecipeEditor({
         </Field>
         <Field label="After photo URL">
           <input
-            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) => update("photo_after_url", event.target.value)}
             value={form.photo_after_url}
           />
@@ -2108,7 +2116,7 @@ function Field({
   label: string;
 }) {
   return (
-    <label className="space-y-2">
+    <label className="min-w-0 space-y-2">
       <span className="block text-sm font-medium text-[var(--muted)]">
         {label}
       </span>
