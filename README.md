@@ -2,6 +2,11 @@
 
 A calm recipe notebook for Ninja Creami experiments.
 
+## Pages
+
+- `/` is the homepage.
+- `/recipes` is the recipe workspace.
+
 ## What It Stores
 
 - Recipe name
@@ -21,6 +26,8 @@ A calm recipe notebook for Ninja Creami experiments.
 - 1-5 star family ratings
 - Recipe version families like `Banana Fudge Swirl` with labels like `v1`,
   `v2`, or `Banana Split Edition`
+- Visitor reviews with reviewer name, 1-5 stars, notes, review history, and
+  per-recipe average ratings
 
 ## Local Setup
 
@@ -41,10 +48,11 @@ NEXT_PUBLIC_SUPABASE_URL=<project-url>
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 ```
 
-The migrations create `public.recipes`, recipe category tables, seeded built-in
-recipes, a public `creami-photos` storage bucket, and RLS policies for anonymous
-family editing. Add Supabase Auth before using it for anything private or
-public-facing beyond a trusted family notebook.
+The migrations create `public.recipes`, `public.recipe_reviews`, recipe category
+tables, seeded built-in recipes, a public `creami-photos` storage bucket, and RLS
+policies for anonymous family editing and visitor review creation. Add Supabase
+Auth before using it for anything private or public-facing beyond a trusted
+family notebook.
 
 ## Vercel
 

@@ -50,6 +50,15 @@ export type Recipe = {
   minor_category_slug: MinorCategorySlug | null;
 };
 
+export type RecipeReview = {
+  id: string;
+  recipe_id: string;
+  created_at: string;
+  reviewer_name: string;
+  rating: number;
+  notes: string;
+};
+
 export const MAJOR_CATEGORIES: MajorCategory[] = [
   { slug: "scoop", name: "Scoop" },
   { slug: "soft-serve-swirl", name: "Soft Serve / Swirl" },
