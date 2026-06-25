@@ -290,23 +290,8 @@ function averageReviewRating(reviews: RecipeReview[]) {
   );
 }
 
-function mergeBuiltInRecipes(recipes: Recipe[]) {
-  const slugs = new Set(recipes.map((recipe) => recipe.slug).filter(Boolean));
-  const missingBuiltIns = DEFAULT_RECIPES.filter(
-    (recipe) => recipe.slug && !slugs.has(recipe.slug),
-  );
-
-  return [...recipes, ...missingBuiltIns];
-}
-
 function sortRecipes(recipes: Recipe[]) {
-  return [...recipes].sort((a, b) => {
-    if (a.built_in !== b.built_in) {
-      return a.built_in ? -1 : 1;
-    }
-
-    return a.name.localeCompare(b.name);
-  });
+  return [...recipes].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function toForm(recipe: Recipe): RecipeForm {
@@ -529,7 +514,7 @@ export default function RecipeWorkspace() {
           LOCAL_STORAGE_REVIEWS_KEY,
         );
         const localRecipes = stored
-          ? mergeBuiltInRecipes((JSON.parse(stored) as unknown[]).map(normalizeRecipe))
+          ? (JSON.parse(stored) as unknown[]).map(normalizeRecipe)
           : DEFAULT_RECIPES;
         const localReviews = storedReviews
           ? (JSON.parse(storedReviews) as unknown[])
@@ -551,7 +536,6 @@ export default function RecipeWorkspace() {
       const { data, error: loadError } = await supabase
         .from("recipes")
         .select("*")
-        .order("built_in", { ascending: false })
         .order("name", { ascending: true });
 
       const { data: reviewData, error: reviewLoadError } = await supabase
@@ -568,9 +552,7 @@ export default function RecipeWorkspace() {
         setRecipes([]);
         setReviews([]);
       } else {
-        const remoteRecipes = mergeBuiltInRecipes(
-          ((data ?? []) as unknown[]).map(normalizeRecipe),
-        );
+        const remoteRecipes = ((data ?? []) as unknown[]).map(normalizeRecipe);
         const sortedRemoteRecipes = sortRecipes(remoteRecipes);
         setRecipes(sortedRemoteRecipes);
         setReviews(
@@ -592,19 +574,19 @@ export default function RecipeWorkspace() {
   }, [supabase]);
 
   useEffect(() => {
-    if (!supabase && recipes.length) {
+    if (!supabase && !isLoading) {
       window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(recipes));
     }
-  }, [recipes, supabase]);
+  }, [isLoading, recipes, supabase]);
 
   useEffect(() => {
-    if (!supabase) {
+    if (!supabase && !isLoading) {
       window.localStorage.setItem(
         LOCAL_STORAGE_REVIEWS_KEY,
         JSON.stringify(reviews),
       );
     }
-  }, [reviews, supabase]);
+  }, [isLoading, reviews, supabase]);
 
   function selectRecipe(recipeId: string) {
     setSelectedId(recipeId);
@@ -843,6 +825,29 @@ export default function RecipeWorkspace() {
     setBusy("");
   }
 
+  async function deleteReview(review: RecipeReview) {
+    setBusy(`review-delete:${review.id}`);
+    setError("");
+    setNotice("");
+
+    if (supabase) {
+      const { error: deleteError } = await supabase
+        .from("recipe_reviews")
+        .delete()
+        .eq("id", review.id);
+
+      if (deleteError) {
+        setError(deleteError.message);
+        setBusy("");
+        return;
+      }
+    }
+
+    setReviews((current) => current.filter((item) => item.id !== review.id));
+    setNotice("Review removed.");
+    setBusy("");
+  }
+
   async function uploadPhoto(
     recipe: Recipe | null,
     stage: "before" | "after",
@@ -979,7 +984,7 @@ export default function RecipeWorkspace() {
               </div>
             </div>
             <p className="max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Built-in Ninja Creami recipes with editable steps, categories,
+              Ninja Creami recipes with editable steps, categories,
               notes, ratings, and before/after photos.
             </p>
           </div>
@@ -993,14 +998,8 @@ export default function RecipeWorkspace() {
                 Home
               </Link>
             </div>
-            <div className="grid min-w-0 grid-cols-2 gap-2 text-sm sm:grid-cols-3 xl:grid-cols-5">
+            <div className="grid min-w-0 grid-cols-2 gap-2 text-sm xl:grid-cols-4">
               <Metric label="Recipes" value={String(recipes.length)} />
-              <Metric
-                label="Built in"
-                value={String(
-                  recipes.filter((recipe) => recipe.built_in).length,
-                )}
-              />
               <Metric label="Version sets" value={String(versionSetCount)} />
               <Metric label="Reviewed" value={String(reviewedRecipes.length)} />
               <Metric
@@ -1110,7 +1109,6 @@ export default function RecipeWorkspace() {
                         {recipe.version_label && (
                           <VersionBadge label={recipe.version_label} />
                         )}
-                        {recipe.built_in && <BuiltInBadge />}
                       </div>
                       {recipe.version_group && (
                         <p className="mt-1 text-xs text-[var(--muted)]">
@@ -1153,7 +1151,7 @@ export default function RecipeWorkspace() {
             >
               {error ||
                 notice ||
-                "Demo mode: add Supabase env vars to persist online."}
+                "Shared database not connected. Changes save only in this browser until Supabase env vars are added."}
             </div>
           )}
 
@@ -1169,6 +1167,7 @@ export default function RecipeWorkspace() {
               <RecipeDetail
                 busy={busy}
                 onDelete={() => deleteRecipe(selectedRecipe)}
+                onDeleteReview={deleteReview}
                 onEdit={() => startEditing(selectedRecipe)}
                 onNewVersion={() => startNewVersion(selectedRecipe)}
                 onRemovePhoto={(stage) => removePhoto(selectedRecipe, stage)}
@@ -1225,14 +1224,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-[var(--muted)]">{label}</p>
       <p className="mt-1 truncate text-lg font-semibold sm:text-xl">{value}</p>
     </div>
-  );
-}
-
-function BuiltInBadge() {
-  return (
-    <span className="rounded-md border border-[#43534a] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--mint)]">
-      Built-in
-    </span>
   );
 }
 
@@ -1430,6 +1421,7 @@ function TagRow({ tags }: { tags: string[] }) {
 function RecipeDetail({
   busy,
   onDelete,
+  onDeleteReview,
   onEdit,
   onNewVersion,
   onRemovePhoto,
@@ -1445,6 +1437,7 @@ function RecipeDetail({
 }: {
   busy: string;
   onDelete: () => void;
+  onDeleteReview: (review: RecipeReview) => void;
   onEdit: () => void;
   onNewVersion: () => void;
   onRemovePhoto: (stage: "before" | "after") => void;
@@ -1461,6 +1454,10 @@ function RecipeDetail({
   reviews: RecipeReview[];
   versionRecipes: Recipe[];
 }) {
+  const deletingReviewId = busy.startsWith("review-delete:")
+    ? busy.slice("review-delete:".length)
+    : "";
+
   return (
     <div className="space-y-5">
       <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-4 sm:p-5">
@@ -1478,7 +1475,6 @@ function RecipeDetail({
                   {recipe.version_label && (
                     <VersionBadge label={recipe.version_label} />
                   )}
-                  {recipe.built_in && <BuiltInBadge />}
                 </div>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
@@ -1584,8 +1580,10 @@ function RecipeDetail({
         </InfoPanel>
         <ReviewPanel
           busy={busy === "review"}
+          deletingReviewId={deletingReviewId}
           form={reviewForm}
           onChange={onReviewChange}
+          onDeleteReview={onDeleteReview}
           onSubmit={onReviewSubmit}
           reviewAverage={reviewAverage}
           reviews={reviews}
@@ -1646,15 +1644,19 @@ function VersionList({
 
 function ReviewPanel({
   busy,
+  deletingReviewId,
   form,
   onChange,
+  onDeleteReview,
   onSubmit,
   reviewAverage,
   reviews,
 }: {
   busy: boolean;
+  deletingReviewId: string;
   form: ReviewForm;
   onChange: (form: ReviewForm) => void;
+  onDeleteReview: (review: RecipeReview) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   reviewAverage: number | null;
   reviews: RecipeReview[];
@@ -1753,7 +1755,19 @@ function ReviewPanel({
                     {formatDate(review.created_at)}
                   </p>
                 </div>
-                <Rating value={review.rating} compact />
+                <div className="flex shrink-0 items-center gap-2">
+                  <Rating value={review.rating} compact />
+                  <button
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--berry)] hover:text-[#ffd5dc] disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={deletingReviewId === review.id}
+                    onClick={() => onDeleteReview(review)}
+                    title="Remove review"
+                    type="button"
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    <span className="sr-only">Remove review</span>
+                  </button>
+                </div>
               </div>
               <p className="mt-3 break-words text-sm leading-6 text-[#ddd9cf]">
                 {review.notes || "No notes left."}
@@ -1952,7 +1966,6 @@ function RecipeEditor({
             <h2 className="min-w-0 break-words text-xl font-semibold sm:text-2xl">
               {form.id ? form.name : "New Creami Pint"}
             </h2>
-            {form.built_in && <BuiltInBadge />}
           </div>
         </div>
         <div className="flex w-full gap-2 sm:w-auto">
