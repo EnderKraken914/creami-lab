@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Creami Lab
 
-## Getting Started
+A calm recipe notebook for Ninja Creami experiments.
 
-First, run the development server:
+## What It Stores
+
+- Recipe name
+- Ingredients
+- Instructions
+- Creami setting used
+- Mix-ins
+- Rating from family
+- Notes
+- Before and after spin photos
+- Tags like `mango`, `gelato`, `kulfi`, and `fudge swirl`
+
+## Local Setup
 
 ```bash
+npm install
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Without Supabase env vars, the app runs in browser local-storage demo mode.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Supabase
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Apply the migration in `supabase/migrations` to a Supabase project, then set:
 
-## Learn More
+```bash
+NEXT_PUBLIC_SUPABASE_URL=<project-url>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+```
 
-To learn more about Next.js, take a look at the following resources:
+The migration creates `public.recipes`, a public `creami-photos` storage bucket,
+and RLS policies for anonymous family editing. Add Supabase Auth before using it
+for anything private or public-facing beyond a trusted family notebook.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Add the same env vars to Vercel for Production, Preview, and Development.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+```
