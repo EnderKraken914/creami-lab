@@ -5,17 +5,21 @@ create table if not exists public.recipes (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   name text not null check (char_length(trim(name)) > 0),
-  ingredients text not null default '',
-  instructions text not null default '',
+  ingredients text[] not null default '{}',
+  instructions text[] not null default '{}',
   creami_setting text not null default '',
   mix_ins text not null default '',
-  family_rating smallint not null default 0 check (family_rating between 0 and 5),
+  family_rating smallint check (family_rating between 1 and 5),
   notes text not null default '',
   tags text[] not null default '{}',
   photo_before_url text,
   photo_before_path text,
   photo_after_url text,
-  photo_after_path text
+  photo_after_path text,
+  slug text unique,
+  built_in boolean not null default false,
+  last_made date,
+  minor_category_slug text
 );
 
 create or replace function public.set_updated_at()

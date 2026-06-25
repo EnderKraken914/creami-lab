@@ -6,13 +6,18 @@ A calm recipe notebook for Ninja Creami experiments.
 
 - Recipe name
 - Ingredients
-- Instructions
+- Instructions as ordered steps
 - Creami setting used
 - Mix-ins
 - Rating from family
+- Last made date
 - Notes
 - Before and after spin photos
 - Tags like `mango`, `gelato`, `kulfi`, and `fudge swirl`
+- Built-in default recipe marker
+- Major and minor recipe categories
+- Daily deterministic Creami of the Day
+- 1-5 star family ratings
 
 ## Local Setup
 
@@ -33,9 +38,10 @@ NEXT_PUBLIC_SUPABASE_URL=<project-url>
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key>
 ```
 
-The migration creates `public.recipes`, a public `creami-photos` storage bucket,
-and RLS policies for anonymous family editing. Add Supabase Auth before using it
-for anything private or public-facing beyond a trusted family notebook.
+The migrations create `public.recipes`, recipe category tables, seeded built-in
+recipes, a public `creami-photos` storage bucket, and RLS policies for anonymous
+family editing. Add Supabase Auth before using it for anything private or
+public-facing beyond a trusted family notebook.
 
 ## Vercel
 

@@ -16,98 +16,65 @@ import {
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient, PHOTO_BUCKET } from "@/lib/supabase";
-
-type Recipe = {
-  id: string;
-  created_at: string;
-  updated_at: string;
-  name: string;
-  ingredients: string;
-  instructions: string;
-  creami_setting: string;
-  mix_ins: string;
-  family_rating: number;
-  notes: string;
-  tags: string[];
-  photo_before_url: string | null;
-  photo_before_path: string | null;
-  photo_after_url: string | null;
-  photo_after_path: string | null;
-};
+import {
+  DEFAULT_RECIPES,
+  MAJOR_CATEGORIES,
+  MINOR_CATEGORIES,
+  getMajorForMinor,
+  getMinorCategory,
+  type MinorCategorySlug,
+  type Recipe,
+} from "@/lib/recipes";
 
 type RecipeForm = {
   id?: string;
+  slug?: string | null;
   name: string;
-  ingredients: string;
-  instructions: string;
+  ingredientsText: string;
+  instructionsText: string;
   creami_setting: string;
   mix_ins: string;
-  family_rating: number;
+  family_rating: string;
   notes: string;
   tagsText: string;
   photo_before_url: string;
   photo_before_path: string;
   photo_after_url: string;
   photo_after_path: string;
+  built_in: boolean;
+  last_made: string;
+  minor_category_slug: MinorCategorySlug | "";
 };
 
-const now = () => new Date().toISOString();
-
-const demoRecipes: Recipe[] = [
-  {
-    id: "demo-mango-kulfi",
-    created_at: now(),
-    updated_at: now(),
-    name: "Mango Kulfi Lab Pint",
-    ingredients:
-      "1 can evaporated milk\n1 cup mango puree\n2 tbsp condensed milk\n1 tbsp pistachio paste\n1/4 tsp cardamom\nPinch of salt",
-    instructions:
-      "Whisk until smooth.\nFreeze in a level pint for 24 hours.\nSpin once on Lite Ice Cream.\nAdd a splash of milk and re-spin if crumbly.",
-    creami_setting: "Lite Ice Cream, then Re-Spin",
-    mix_ins: "Crushed pistachios after first spin",
-    family_rating: 5,
-    notes: 'Dad said tastes like real kulfi.',
-    tags: ["mango", "kulfi", "pistachio", "family favorite"],
-    photo_before_url: "/demo-mango-before.png",
-    photo_before_path: null,
-    photo_after_url: "/demo-mango-after.png",
-    photo_after_path: null,
-  },
-  {
-    id: "demo-fudge-swirl",
-    created_at: now(),
-    updated_at: now(),
-    name: "Chocolate Fudge Swirl",
-    ingredients:
-      "1 cup Fairlife chocolate milk\n1 scoop chocolate protein powder\n1 tbsp cocoa powder\n1 tbsp cream cheese\n1 tsp vanilla",
-    instructions:
-      "Blend until glossy.\nFreeze flat.\nSpin on Ice Cream.\nMake a center well, add fudge, then Mix-In.",
-    creami_setting: "Ice Cream, then Mix-In",
-    mix_ins: "Warm fudge ribbon and mini chocolate chips",
-    family_rating: 4,
-    notes: "Richer after sitting for five minutes.",
-    tags: ["chocolate", "fudge swirl", "gelato"],
-    photo_before_url: "/demo-fudge-before.png",
-    photo_before_path: null,
-    photo_after_url: "/demo-fudge-after.png",
-    photo_after_path: null,
-  },
-];
+const LOCAL_STORAGE_KEY = "creami-lab-recipes-v2";
+const STAR_VALUES = [1, 2, 3, 4, 5] as const;
 
 const emptyForm: RecipeForm = {
   name: "",
-  ingredients: "",
-  instructions: "",
+  ingredientsText: "",
+  instructionsText: "",
   creami_setting: "",
   mix_ins: "",
-  family_rating: 0,
+  family_rating: "",
   notes: "",
   tagsText: "",
   photo_before_url: "",
   photo_before_path: "",
   photo_after_url: "",
   photo_after_path: "",
+  built_in: false,
+  last_made: "",
+  minor_category_slug: "ice-cream",
 };
+
+const now = () => new Date().toISOString();
+
+function splitLines(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 
 function normalizeTags(tagsText: string) {
   return tagsText
@@ -117,38 +84,148 @@ function normalizeTags(tagsText: string) {
     .filter((tag, index, all) => all.indexOf(tag) === index);
 }
 
+function normalizeTextList(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return splitLines(value);
+  }
+
+  return [];
+}
+
+function normalizeRating(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  const normalized = Math.trunc(parsed);
+  return Number.isFinite(normalized) && normalized >= 1 && normalized <= 5
+    ? normalized
+    : null;
+}
+
+function normalizeRecipe(raw: unknown): Recipe {
+  const value = raw as Record<string, unknown>;
+  const fallback = DEFAULT_RECIPES.find(
+    (recipe) => recipe.slug && recipe.slug === value.slug,
+  );
+
+  return {
+    id: String(value.id ?? fallback?.id ?? crypto.randomUUID()),
+    slug:
+      typeof value.slug === "string" && value.slug.length
+        ? value.slug
+        : fallback?.slug ?? null,
+    created_at: String(value.created_at ?? fallback?.created_at ?? now()),
+    updated_at: String(value.updated_at ?? fallback?.updated_at ?? now()),
+    name: String(value.name ?? fallback?.name ?? "Untitled pint"),
+    ingredients: normalizeTextList(value.ingredients ?? fallback?.ingredients),
+    instructions: normalizeTextList(
+      value.instructions ?? fallback?.instructions,
+    ),
+    creami_setting: String(
+      value.creami_setting ?? fallback?.creami_setting ?? "",
+    ),
+    mix_ins: String(value.mix_ins ?? fallback?.mix_ins ?? ""),
+    family_rating: normalizeRating(
+      value.family_rating ?? fallback?.family_rating,
+    ),
+    notes: String(value.notes ?? fallback?.notes ?? ""),
+    tags: Array.isArray(value.tags)
+      ? value.tags.map((tag) => String(tag).trim()).filter(Boolean)
+      : fallback?.tags ?? [],
+    photo_before_url:
+      typeof value.photo_before_url === "string"
+        ? value.photo_before_url
+        : fallback?.photo_before_url ?? null,
+    photo_before_path:
+      typeof value.photo_before_path === "string"
+        ? value.photo_before_path
+        : fallback?.photo_before_path ?? null,
+    photo_after_url:
+      typeof value.photo_after_url === "string"
+        ? value.photo_after_url
+        : fallback?.photo_after_url ?? null,
+    photo_after_path:
+      typeof value.photo_after_path === "string"
+        ? value.photo_after_path
+        : fallback?.photo_after_path ?? null,
+    built_in: Boolean(value.built_in ?? fallback?.built_in ?? false),
+    last_made:
+      typeof value.last_made === "string" && value.last_made.length
+        ? value.last_made
+        : null,
+    minor_category_slug: getMinorCategory(String(value.minor_category_slug))
+      ? (String(value.minor_category_slug) as MinorCategorySlug)
+      : fallback?.minor_category_slug ?? null,
+  };
+}
+
+function mergeBuiltInRecipes(recipes: Recipe[]) {
+  const slugs = new Set(recipes.map((recipe) => recipe.slug).filter(Boolean));
+  const missingBuiltIns = DEFAULT_RECIPES.filter(
+    (recipe) => recipe.slug && !slugs.has(recipe.slug),
+  );
+
+  return [...recipes, ...missingBuiltIns];
+}
+
+function sortRecipes(recipes: Recipe[]) {
+  return [...recipes].sort((a, b) => {
+    if (a.built_in !== b.built_in) {
+      return a.built_in ? -1 : 1;
+    }
+
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function toForm(recipe: Recipe): RecipeForm {
   return {
     id: recipe.id,
+    slug: recipe.slug,
     name: recipe.name,
-    ingredients: recipe.ingredients,
-    instructions: recipe.instructions,
+    ingredientsText: recipe.ingredients.join("\n"),
+    instructionsText: recipe.instructions.join("\n"),
     creami_setting: recipe.creami_setting,
     mix_ins: recipe.mix_ins,
-    family_rating: recipe.family_rating,
+    family_rating:
+      recipe.family_rating === null ? "" : String(recipe.family_rating),
     notes: recipe.notes,
     tagsText: recipe.tags.join(", "),
     photo_before_url: recipe.photo_before_url ?? "",
     photo_before_path: recipe.photo_before_path ?? "",
     photo_after_url: recipe.photo_after_url ?? "",
     photo_after_path: recipe.photo_after_path ?? "",
+    built_in: recipe.built_in,
+    last_made: recipe.last_made ?? "",
+    minor_category_slug: recipe.minor_category_slug ?? "",
   };
 }
 
 function formToPayload(form: RecipeForm) {
   return {
+    slug: form.slug ?? null,
     name: form.name.trim() || "Untitled pint",
-    ingredients: form.ingredients.trim(),
-    instructions: form.instructions.trim(),
+    ingredients: splitLines(form.ingredientsText),
+    instructions: splitLines(form.instructionsText),
     creami_setting: form.creami_setting.trim(),
     mix_ins: form.mix_ins.trim(),
-    family_rating: Number(form.family_rating) || 0,
+    family_rating:
+      form.family_rating === "" ? null : Number(form.family_rating),
     notes: form.notes.trim(),
     tags: normalizeTags(form.tagsText),
     photo_before_url: form.photo_before_url.trim() || null,
     photo_before_path: form.photo_before_path.trim() || null,
     photo_after_url: form.photo_after_url.trim() || null,
     photo_after_path: form.photo_after_path.trim() || null,
+    built_in: form.built_in,
+    last_made: form.last_made || null,
+    minor_category_slug: form.minor_category_slug || null,
   };
 }
 
@@ -168,6 +245,47 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatOptionalDate(value: string | null) {
+  return value ? formatDate(value) : "Not made yet";
+}
+
+function getLocalDateKey() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+function getCreamiOfTheDay(recipes: Recipe[]) {
+  if (!recipes.length) {
+    return null;
+  }
+
+  return recipes[hashString(getLocalDateKey()) % recipes.length];
+}
+
+function categoryText(recipe: Recipe) {
+  const minor = getMinorCategory(recipe.minor_category_slug);
+  const major = getMajorForMinor(recipe.minor_category_slug);
+
+  if (!minor || !major) {
+    return "Uncategorized";
+  }
+
+  return `${major.name} / ${minor.name}`;
+}
+
 export default function Home() {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -175,13 +293,21 @@ export default function Home() {
   const [editing, setEditing] = useState<RecipeForm | null>(null);
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
+  const sortedRecipes = useMemo(() => sortRecipes(recipes), [recipes]);
   const selectedRecipe =
-    recipes.find((recipe) => recipe.id === selectedId) ?? recipes[0] ?? null;
+    sortedRecipes.find((recipe) => recipe.id === selectedId) ??
+    sortedRecipes[0] ??
+    null;
+  const creamiOfTheDay = useMemo(
+    () => getCreamiOfTheDay(sortedRecipes),
+    [sortedRecipes],
+  );
 
   const allTags = useMemo(
     () =>
@@ -194,32 +320,41 @@ export default function Home() {
   const filteredRecipes = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return recipes.filter((recipe) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        [
+    return sortRecipes(
+      recipes.filter((recipe) => {
+        const searchable = [
           recipe.name,
-          recipe.ingredients,
-          recipe.instructions,
+          recipe.ingredients.join(" "),
+          recipe.instructions.join(" "),
           recipe.creami_setting,
           recipe.mix_ins,
           recipe.notes,
           recipe.tags.join(" "),
+          categoryText(recipe),
         ]
           .join(" ")
-          .toLowerCase()
-          .includes(normalizedQuery);
-      const matchesTag =
-        tagFilter === "all" || recipe.tags.includes(tagFilter);
+          .toLowerCase();
+        const matchesQuery =
+          !normalizedQuery || searchable.includes(normalizedQuery);
+        const matchesTag =
+          tagFilter === "all" || recipe.tags.includes(tagFilter);
+        const matchesCategory =
+          categoryFilter === "all" ||
+          recipe.minor_category_slug === categoryFilter;
 
-      return matchesQuery && matchesTag;
-    });
-  }, [query, recipes, tagFilter]);
+        return matchesQuery && matchesTag && matchesCategory;
+      }),
+    );
+  }, [categoryFilter, query, recipes, tagFilter]);
 
-  const averageRating = recipes.length
-    ? recipes.reduce((sum, recipe) => sum + recipe.family_rating, 0) /
-      recipes.length
-    : 0;
+  const ratedRecipes = recipes.filter(
+    (recipe): recipe is Recipe & { family_rating: number } =>
+      recipe.family_rating !== null,
+  );
+  const averageRating = ratedRecipes.length
+    ? ratedRecipes.reduce((sum, recipe) => sum + recipe.family_rating, 0) /
+      ratedRecipes.length
+    : null;
 
   useEffect(() => {
     let isMounted = true;
@@ -229,14 +364,15 @@ export default function Home() {
       setError("");
 
       if (!supabase) {
-        const stored = window.localStorage.getItem("creami-lab-recipes");
+        const stored = window.localStorage.getItem(LOCAL_STORAGE_KEY);
         const localRecipes = stored
-          ? (JSON.parse(stored) as Recipe[])
-          : demoRecipes;
+          ? mergeBuiltInRecipes((JSON.parse(stored) as unknown[]).map(normalizeRecipe))
+          : DEFAULT_RECIPES;
+        const sortedLocalRecipes = sortRecipes(localRecipes);
 
         if (isMounted) {
-          setRecipes(localRecipes);
-          setSelectedId(localRecipes[0]?.id ?? "");
+          setRecipes(sortedLocalRecipes);
+          setSelectedId(sortedLocalRecipes[0]?.id ?? "");
           setIsLoading(false);
         }
 
@@ -246,7 +382,8 @@ export default function Home() {
       const { data, error: loadError } = await supabase
         .from("recipes")
         .select("*")
-        .order("updated_at", { ascending: false });
+        .order("built_in", { ascending: false })
+        .order("name", { ascending: true });
 
       if (!isMounted) {
         return;
@@ -256,9 +393,12 @@ export default function Home() {
         setError(loadError.message);
         setRecipes([]);
       } else {
-        const remoteRecipes = (data ?? []) as Recipe[];
-        setRecipes(remoteRecipes);
-        setSelectedId(remoteRecipes[0]?.id ?? "");
+        const remoteRecipes = mergeBuiltInRecipes(
+          ((data ?? []) as unknown[]).map(normalizeRecipe),
+        );
+        const sortedRemoteRecipes = sortRecipes(remoteRecipes);
+        setRecipes(sortedRemoteRecipes);
+        setSelectedId(sortedRemoteRecipes[0]?.id ?? "");
       }
 
       setIsLoading(false);
@@ -273,7 +413,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!supabase && recipes.length) {
-      window.localStorage.setItem("creami-lab-recipes", JSON.stringify(recipes));
+      window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(recipes));
     }
   }, [recipes, supabase]);
 
@@ -281,7 +421,7 @@ export default function Home() {
     setEditing({
       ...emptyForm,
       name: "New Creami Pint",
-      tagsText: "mango, gelato",
+      tagsText: "",
     });
     setNotice("");
   }
@@ -321,15 +461,17 @@ export default function Home() {
 
       setRecipes((current) => {
         const exists = current.some((recipe) => recipe.id === savedRecipe.id);
-        return exists
-          ? current.map((recipe) =>
-              recipe.id === savedRecipe.id ? savedRecipe : recipe,
-            )
-          : [savedRecipe, ...current];
+        return sortRecipes(
+          exists
+            ? current.map((recipe) =>
+                recipe.id === savedRecipe.id ? savedRecipe : recipe,
+              )
+            : [savedRecipe, ...current],
+        );
       });
       setSelectedId(savedRecipe.id);
       setEditing(null);
-      setNotice("Saved locally.");
+      setNotice("Recipe saved locally.");
       setBusy("");
       return;
     }
@@ -351,14 +493,16 @@ export default function Home() {
       return;
     }
 
-    const savedRecipe = data as Recipe;
+    const savedRecipe = normalizeRecipe(data);
     setRecipes((current) => {
       const exists = current.some((recipe) => recipe.id === savedRecipe.id);
-      return exists
-        ? current.map((recipe) =>
-            recipe.id === savedRecipe.id ? savedRecipe : recipe,
-          )
-        : [savedRecipe, ...current];
+      return sortRecipes(
+        exists
+          ? current.map((recipe) =>
+              recipe.id === savedRecipe.id ? savedRecipe : recipe,
+            )
+          : [savedRecipe, ...current],
+      );
     });
     setSelectedId(savedRecipe.id);
     setEditing(null);
@@ -377,10 +521,12 @@ export default function Home() {
 
     if (!supabase) {
       setRecipes((current) =>
-        current.map((recipe) =>
-          recipe.id === recipeId
-            ? { ...recipe, ...fields, updated_at: now() }
-            : recipe,
+        sortRecipes(
+          current.map((recipe) =>
+            recipe.id === recipeId
+              ? { ...recipe, ...fields, updated_at: now() }
+              : recipe,
+          ),
         ),
       );
       setNotice(successMessage);
@@ -401,10 +547,12 @@ export default function Home() {
       return;
     }
 
-    const updatedRecipe = data as Recipe;
+    const updatedRecipe = normalizeRecipe(data);
     setRecipes((current) =>
-      current.map((recipe) =>
-        recipe.id === updatedRecipe.id ? updatedRecipe : recipe,
+      sortRecipes(
+        current.map((recipe) =>
+          recipe.id === updatedRecipe.id ? updatedRecipe : recipe,
+        ),
       ),
     );
     setNotice(successMessage);
@@ -543,15 +691,21 @@ export default function Home() {
               </div>
             </div>
             <p className="max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Family-rated Ninja Creami recipes, spin settings, notes, tags,
-              and before/after photos in one quiet workspace.
+              Built-in Ninja Creami recipes with editable steps, categories,
+              notes, ratings, and before/after photos.
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-sm sm:min-w-[420px]">
             <Metric label="Recipes" value={String(recipes.length)} />
-            <Metric label="Avg rating" value={averageRating.toFixed(1)} />
-            <Metric label="Tags" value={String(allTags.length)} />
+            <Metric
+              label="Built in"
+              value={String(recipes.filter((recipe) => recipe.built_in).length)}
+            />
+            <Metric
+              label="Avg rating"
+              value={averageRating === null ? "None" : averageRating.toFixed(1)}
+            />
           </div>
         </div>
       </section>
@@ -577,9 +731,31 @@ export default function Home() {
               <input
                 className="min-w-0 flex-1 bg-transparent text-[var(--foreground)] outline-none placeholder:text-[#777d72]"
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search mango, kulfi, fudge..."
+                placeholder="Search mango, gelato, fudge..."
                 value={query}
               />
+            </label>
+
+            <label className="mb-3 flex h-11 items-center gap-2 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--muted)]">
+              <SlidersHorizontal size={16} aria-hidden="true" />
+              <select
+                className="min-w-0 flex-1 bg-transparent text-[var(--foreground)] outline-none"
+                onChange={(event) => setCategoryFilter(event.target.value)}
+                value={categoryFilter}
+              >
+                <option value="all">All categories</option>
+                {MAJOR_CATEGORIES.map((major) => (
+                  <optgroup key={major.slug} label={major.name}>
+                    {MINOR_CATEGORIES.filter(
+                      (minor) => minor.major_slug === major.slug,
+                    ).map((minor) => (
+                      <option key={minor.slug} value={minor.slug}>
+                        {minor.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </label>
 
             <label className="flex h-11 items-center gap-2 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--muted)]">
@@ -618,12 +794,17 @@ export default function Home() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h3 className="truncate text-sm font-semibold">
-                        {recipe.name}
-                      </h3>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h3 className="truncate text-sm font-semibold">
+                          {recipe.name}
+                        </h3>
+                        {recipe.built_in && <BuiltInBadge />}
+                      </div>
                       <p className="mt-1 text-xs text-[var(--muted)]">
-                        {recipe.creami_setting || "No setting yet"} ·{" "}
-                        {formatDate(recipe.updated_at)}
+                        {categoryText(recipe)} - {recipe.creami_setting}
+                      </p>
+                      <p className="mt-1 text-xs text-[var(--muted)]">
+                        Last made: {formatOptionalDate(recipe.last_made)}
                       </p>
                     </div>
                     <Rating value={recipe.family_rating} compact />
@@ -648,21 +829,39 @@ export default function Home() {
                   : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)]"
               }`}
             >
-              {error || notice || "Demo mode: add Supabase env vars to persist online."}
+              {error ||
+                notice ||
+                "Demo mode: add Supabase env vars to persist online."}
             </div>
           )}
 
           {selectedRecipe ? (
-            <RecipeDetail
-              busy={busy}
-              onDelete={() => deleteRecipe(selectedRecipe)}
-              onEdit={() => startEditing(selectedRecipe)}
-              onRemovePhoto={(stage) => removePhoto(selectedRecipe, stage)}
-              onUploadPhoto={(stage, event) =>
-                uploadPhoto(selectedRecipe, stage, event)
-              }
-              recipe={selectedRecipe}
-            />
+            <>
+              {creamiOfTheDay && (
+                <CreamiOfTheDayCard
+                  onEdit={() => startEditing(creamiOfTheDay)}
+                  onSelect={() => setSelectedId(creamiOfTheDay.id)}
+                  recipe={creamiOfTheDay}
+                />
+              )}
+              <RecipeDetail
+                busy={busy}
+                onDelete={() => deleteRecipe(selectedRecipe)}
+                onEdit={() => startEditing(selectedRecipe)}
+                onRate={(rating) =>
+                  updateRecipeFields(
+                    selectedRecipe.id,
+                    { family_rating: rating },
+                    "Rating saved.",
+                  )
+                }
+                onRemovePhoto={(stage) => removePhoto(selectedRecipe, stage)}
+                onUploadPhoto={(stage, event) =>
+                  uploadPhoto(selectedRecipe, stage, event)
+                }
+                recipe={selectedRecipe}
+              />
+            </>
           ) : (
             <div className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-8 text-center">
               <Sparkles
@@ -706,7 +905,71 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Rating({ value, compact = false }: { value: number; compact?: boolean }) {
+function BuiltInBadge() {
+  return (
+    <span className="rounded-md border border-[#43534a] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--mint)]">
+      Built-in
+    </span>
+  );
+}
+
+function StarRatingControl({
+  disabled = false,
+  onRate,
+  value,
+}: {
+  disabled?: boolean;
+  onRate: (rating: number) => void;
+  value: number | null;
+}) {
+  return (
+    <div
+      aria-label="Rating from family"
+      className="flex items-center gap-1"
+      role="radiogroup"
+    >
+      {STAR_VALUES.map((rating) => (
+        <button
+          aria-checked={value === rating}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-[#596159] transition hover:border-[var(--line)] hover:text-[var(--amber)] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={disabled}
+          key={rating}
+          onClick={() => onRate(rating)}
+          role="radio"
+          title={`Rate ${rating}/5`}
+          type="button"
+        >
+          <Star
+            aria-hidden="true"
+            className={
+              value !== null && rating <= value
+                ? "fill-[var(--amber)] text-[var(--amber)]"
+                : ""
+            }
+            size={20}
+          />
+          <span className="sr-only">Rate {rating}/5</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Rating({
+  value,
+  compact = false,
+}: {
+  value: number | null;
+  compact?: boolean;
+}) {
+  if (value === null) {
+    return (
+      <span className="text-xs text-[var(--muted)]" title="No family rating">
+        Not rated
+      </span>
+    );
+  }
+
   return (
     <div
       className={`flex items-center ${compact ? "gap-0.5" : "gap-1"}`}
@@ -725,6 +988,54 @@ function Rating({ value, compact = false }: { value: number; compact?: boolean }
         />
       ))}
       <span className="sr-only">{value}/5 family rating</span>
+    </div>
+  );
+}
+
+function CreamiOfTheDayCard({
+  onEdit,
+  onSelect,
+  recipe,
+}: {
+  onEdit: () => void;
+  onSelect: () => void;
+  recipe: Recipe;
+}) {
+  return (
+    <div className="rounded-md border border-[#4b5136] bg-[#171912] p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--amber)]">
+            <Sparkles size={16} aria-hidden="true" />
+            Creami of the Day
+          </div>
+          <h2 className="text-2xl font-semibold tracking-normal">
+            {recipe.name}
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {categoryText(recipe)} - {recipe.creami_setting || "No setting"}
+          </p>
+          <TagRow tags={recipe.tags.slice(0, 5)} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)]"
+            onClick={onSelect}
+            type="button"
+          >
+            <Sparkles size={16} aria-hidden="true" />
+            View
+          </button>
+          <button
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--mint)] px-3 text-sm font-semibold text-[#10201a] transition hover:brightness-110"
+            onClick={onEdit}
+            type="button"
+          >
+            <Edit3 size={16} aria-hidden="true" />
+            Edit
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -752,6 +1063,7 @@ function RecipeDetail({
   busy,
   onDelete,
   onEdit,
+  onRate,
   onRemovePhoto,
   onUploadPhoto,
   recipe,
@@ -759,6 +1071,7 @@ function RecipeDetail({
   busy: string;
   onDelete: () => void;
   onEdit: () => void;
+  onRate: (rating: number) => void;
   onRemovePhoto: (stage: "before" | "after") => void;
   onUploadPhoto: (
     stage: "before" | "after",
@@ -774,11 +1087,14 @@ function RecipeDetail({
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-sm text-[var(--muted)]">
-                  Updated {formatDate(recipe.updated_at)}
+                  {categoryText(recipe)}
                 </p>
-                <h2 className="mt-1 text-3xl font-semibold tracking-normal">
-                  {recipe.name}
-                </h2>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <h2 className="text-3xl font-semibold tracking-normal">
+                    {recipe.name}
+                  </h2>
+                  {recipe.built_in && <BuiltInBadge />}
+                </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -801,7 +1117,16 @@ function RecipeDetail({
                 </button>
               </div>
             </div>
-            <Rating value={recipe.family_rating} />
+            <div className="grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-3">
+              <span>Setting: {recipe.creami_setting || "Not logged"}</span>
+              <span>Last made: {formatOptionalDate(recipe.last_made)}</span>
+              <span>
+                Rating:{" "}
+                {recipe.family_rating === null
+                  ? "Not rated"
+                  : `${recipe.family_rating}/5`}
+              </span>
+            </div>
             <TagRow tags={recipe.tags} />
           </div>
 
@@ -826,10 +1151,10 @@ function RecipeDetail({
 
       <div className="grid gap-4 xl:grid-cols-2">
         <InfoPanel onEdit={onEdit} title="Ingredients">
-          <LineBreakText value={recipe.ingredients} />
+          <ItemList items={recipe.ingredients} />
         </InfoPanel>
         <InfoPanel onEdit={onEdit} title="Instructions">
-          <LineBreakText value={recipe.instructions} />
+          <StepList items={recipe.instructions} />
         </InfoPanel>
         <InfoPanel onEdit={onEdit} title="Creami setting used">
           <p>{recipe.creami_setting || "Not logged yet."}</p>
@@ -837,11 +1162,28 @@ function RecipeDetail({
         <InfoPanel onEdit={onEdit} title="Mix-ins">
           <p>{recipe.mix_ins || "No mix-ins logged."}</p>
         </InfoPanel>
+        <InfoPanel onEdit={onEdit} title="Category">
+          <p>{categoryText(recipe)}</p>
+        </InfoPanel>
+        <InfoPanel onEdit={onEdit} title="Last made">
+          <p>{formatOptionalDate(recipe.last_made)}</p>
+        </InfoPanel>
         <InfoPanel onEdit={onEdit} title="Family rating">
-          <Rating value={recipe.family_rating} />
+          <div className="flex flex-wrap items-center gap-3">
+            <StarRatingControl
+              disabled={busy === recipe.id}
+              onRate={onRate}
+              value={recipe.family_rating}
+            />
+            <span className="text-xs text-[var(--muted)]">
+              {recipe.family_rating === null
+                ? "Not rated"
+                : `${recipe.family_rating}/5`}
+            </span>
+          </div>
         </InfoPanel>
         <InfoPanel onEdit={onEdit} title="Notes">
-          <LineBreakText value={recipe.notes || "No notes yet."} />
+          <p>{recipe.notes || "No notes yet."}</p>
         </InfoPanel>
       </div>
     </div>
@@ -891,7 +1233,7 @@ function PhotoSlot({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-[var(--muted)]">
             <ImagePlus size={24} aria-hidden="true" />
-            <span>{label}</span>
+            <span>Empty photo slot</span>
           </div>
         )}
       </div>
@@ -938,13 +1280,39 @@ function InfoPanel({
   );
 }
 
-function LineBreakText({ value }: { value: string }) {
+function ItemList({ items }: { items: string[] }) {
+  if (!items.length) {
+    return <p>No ingredients logged.</p>;
+  }
+
   return (
-    <div className="space-y-1">
-      {value.split("\n").map((line, index) => (
-        <p key={`${line}-${index}`}>{line || "\u00a0"}</p>
+    <ul className="space-y-1">
+      {items.map((item, index) => (
+        <li className="flex gap-2" key={`${item}-${index}`}>
+          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--mint)]" />
+          <span>{item}</span>
+        </li>
       ))}
-    </div>
+    </ul>
+  );
+}
+
+function StepList({ items }: { items: string[] }) {
+  if (!items.length) {
+    return <p>No instructions logged.</p>;
+  }
+
+  return (
+    <ol className="space-y-2">
+      {items.map((item, index) => (
+        <li className="flex gap-3" key={`${item}-${index}`}>
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[var(--line)] text-xs text-[var(--mint)]">
+            {index + 1}
+          </span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -973,9 +1341,12 @@ function RecipeEditor({
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm text-[var(--muted)]">Edit recipe</p>
-          <h2 className="text-2xl font-semibold">
-            {form.id ? form.name : "New Creami Pint"}
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-semibold">
+              {form.id ? form.name : "New Creami Pint"}
+            </h2>
+            {form.built_in && <BuiltInBadge />}
+          </div>
         </div>
         <div className="flex gap-2">
           <button
@@ -1006,28 +1377,72 @@ function RecipeEditor({
             value={form.name}
           />
         </Field>
+        <Field label="Category">
+          <select
+            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            onChange={(event) =>
+              update(
+                "minor_category_slug",
+                event.target.value as RecipeForm["minor_category_slug"],
+              )
+            }
+            value={form.minor_category_slug}
+          >
+            {MAJOR_CATEGORIES.map((major) => (
+              <optgroup key={major.slug} label={major.name}>
+                {MINOR_CATEGORIES.filter(
+                  (minor) => minor.major_slug === major.slug,
+                ).map((minor) => (
+                  <option key={minor.slug} value={minor.slug}>
+                    {minor.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </Field>
         <Field label="Creami setting used">
           <input
             className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) =>
               update("creami_setting", event.target.value)
             }
-            placeholder="Lite Ice Cream, Re-Spin, Mix-In"
+            placeholder="Ice Cream, Gelato, Respin, Mix-In"
             value={form.creami_setting}
           />
         </Field>
-        <Field label="Ingredients">
+        <Field label="Rating from family">
+          <div className="flex min-h-11 items-center justify-between gap-3 rounded-md border border-[var(--line)] bg-[#0f1311] px-2 py-1">
+            <StarRatingControl
+              disabled={busy}
+              onRate={(rating) => update("family_rating", String(rating))}
+              value={normalizeRating(form.family_rating)}
+            />
+            {form.family_rating && (
+              <button
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--berry)] hover:text-[#ffd5dc]"
+                onClick={() => update("family_rating", "")}
+                title="Clear rating"
+                type="button"
+              >
+                <X size={15} aria-hidden="true" />
+                <span className="sr-only">Clear rating</span>
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field label="Ingredients, one per line">
           <textarea
-            className="min-h-36 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
-            onChange={(event) => update("ingredients", event.target.value)}
-            value={form.ingredients}
+            className="min-h-44 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
+            onChange={(event) => update("ingredientsText", event.target.value)}
+            value={form.ingredientsText}
           />
         </Field>
-        <Field label="Instructions">
+        <Field label="Instructions, one ordered step per line">
           <textarea
-            className="min-h-36 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
-            onChange={(event) => update("instructions", event.target.value)}
-            value={form.instructions}
+            className="min-h-44 w-full resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
+            onChange={(event) => update("instructionsText", event.target.value)}
+            value={form.instructionsText}
           />
         </Field>
         <Field label="Mix-ins">
@@ -1045,22 +1460,13 @@ function RecipeEditor({
             value={form.notes}
           />
         </Field>
-        <Field label="Rating from family">
-          <div className="flex h-11 items-center gap-3 rounded-md border border-[var(--line)] bg-[#0f1311] px-3">
-            <input
-              className="w-full accent-[var(--amber)]"
-              max={5}
-              min={0}
-              onChange={(event) =>
-                update("family_rating", Number(event.target.value))
-              }
-              type="range"
-              value={form.family_rating}
-            />
-            <span className="w-10 text-right text-sm tabular-nums">
-              {form.family_rating}/5
-            </span>
-          </div>
+        <Field label="Last made">
+          <input
+            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            onChange={(event) => update("last_made", event.target.value)}
+            type="date"
+            value={form.last_made}
+          />
         </Field>
         <Field label="Tags">
           <input
