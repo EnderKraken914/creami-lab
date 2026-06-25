@@ -30,6 +30,9 @@ type RecipeForm = {
   id?: string;
   slug?: string | null;
   name: string;
+  version_group: string;
+  version_label: string;
+  version_notes: string;
   ingredientsText: string;
   instructionsText: string;
   creami_setting: string;
@@ -51,6 +54,9 @@ const STAR_VALUES = [1, 2, 3, 4, 5] as const;
 
 const emptyForm: RecipeForm = {
   name: "",
+  version_group: "",
+  version_label: "",
+  version_notes: "",
   ingredientsText: "",
   instructionsText: "",
   creami_setting: "",
@@ -108,6 +114,63 @@ function normalizeRating(value: unknown) {
     : null;
 }
 
+function normalizeOptionalText(value: unknown) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function normalizeVersionKey(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function stripVersionSuffix(name: string) {
+  return name
+    .replace(/\s+v\d+\b.*$/i, "")
+    .replace(/\s+\([^)]*\)\s*$/i, "")
+    .trim();
+}
+
+function versionFamilyName(recipe: Recipe) {
+  return recipe.version_group?.trim() || stripVersionSuffix(recipe.name);
+}
+
+function versionSummary(recipe: Recipe) {
+  const label = recipe.version_label?.trim();
+  const notes = recipe.version_notes.trim();
+
+  if (!label && !notes) {
+    return "No version label";
+  }
+
+  if (label && notes) {
+    return `${label} (${notes})`;
+  }
+
+  return label || notes;
+}
+
+function nextVersionLabel(recipe: Recipe, recipes: Recipe[]) {
+  const family = versionFamilyName(recipe);
+  const familyKey = normalizeVersionKey(family);
+  const maxVersion = recipes.reduce((max, item) => {
+    const itemFamily = versionFamilyName(item);
+    const itemFamilyKey = normalizeVersionKey(item.version_group || itemFamily);
+
+    if (itemFamilyKey !== familyKey) {
+      return max;
+    }
+
+    const match = (item.version_label || item.name).match(/\bv(\d+)\b/i);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+
+  return `v${maxVersion + 1}`;
+}
+
 function normalizeRecipe(raw: unknown): Recipe {
   const value = raw as Record<string, unknown>;
   const fallback = DEFAULT_RECIPES.find(
@@ -123,6 +186,13 @@ function normalizeRecipe(raw: unknown): Recipe {
     created_at: String(value.created_at ?? fallback?.created_at ?? now()),
     updated_at: String(value.updated_at ?? fallback?.updated_at ?? now()),
     name: String(value.name ?? fallback?.name ?? "Untitled pint"),
+    version_group: normalizeOptionalText(
+      value.version_group ?? fallback?.version_group,
+    ),
+    version_label: normalizeOptionalText(
+      value.version_label ?? fallback?.version_label,
+    ),
+    version_notes: String(value.version_notes ?? fallback?.version_notes ?? ""),
     ingredients: normalizeTextList(value.ingredients ?? fallback?.ingredients),
     instructions: normalizeTextList(
       value.instructions ?? fallback?.instructions,
@@ -189,6 +259,9 @@ function toForm(recipe: Recipe): RecipeForm {
     id: recipe.id,
     slug: recipe.slug,
     name: recipe.name,
+    version_group: recipe.version_group ?? "",
+    version_label: recipe.version_label ?? "",
+    version_notes: recipe.version_notes,
     ingredientsText: recipe.ingredients.join("\n"),
     instructionsText: recipe.instructions.join("\n"),
     creami_setting: recipe.creami_setting,
@@ -211,6 +284,9 @@ function formToPayload(form: RecipeForm) {
   return {
     slug: form.slug ?? null,
     name: form.name.trim() || "Untitled pint",
+    version_group: form.version_group.trim() || null,
+    version_label: form.version_label.trim() || null,
+    version_notes: form.version_notes.trim(),
     ingredients: splitLines(form.ingredientsText),
     instructions: splitLines(form.instructionsText),
     creami_setting: form.creami_setting.trim(),
@@ -308,6 +384,31 @@ export default function Home() {
     () => getCreamiOfTheDay(sortedRecipes),
     [sortedRecipes],
   );
+  const selectedVersionRecipes = useMemo(() => {
+    if (!selectedRecipe) {
+      return [];
+    }
+
+    const family = versionFamilyName(selectedRecipe);
+    const familyKey = normalizeVersionKey(family);
+
+    if (!familyKey) {
+      return [];
+    }
+
+    return sortRecipes(
+      recipes.filter(
+        (recipe) =>
+          normalizeVersionKey(recipe.version_group || versionFamilyName(recipe)) ===
+          familyKey,
+      ),
+    );
+  }, [recipes, selectedRecipe]);
+  const versionSetCount = new Set(
+    recipes
+      .map((recipe) => normalizeVersionKey(recipe.version_group))
+      .filter(Boolean),
+  ).size;
 
   const allTags = useMemo(
     () =>
@@ -329,6 +430,9 @@ export default function Home() {
           recipe.creami_setting,
           recipe.mix_ins,
           recipe.notes,
+          recipe.version_group,
+          recipe.version_label,
+          recipe.version_notes,
           recipe.tags.join(" "),
           categoryText(recipe),
         ]
@@ -433,6 +537,33 @@ export default function Home() {
     }
 
     setEditing(toForm(recipe));
+    setNotice("");
+  }
+
+  function startNewVersion(recipe: Recipe | null) {
+    if (!recipe) {
+      startNewRecipe();
+      return;
+    }
+
+    const family = versionFamilyName(recipe);
+
+    setEditing({
+      ...toForm(recipe),
+      id: undefined,
+      slug: null,
+      built_in: false,
+      family_rating: "",
+      last_made: "",
+      notes: "",
+      photo_after_path: "",
+      photo_after_url: "",
+      photo_before_path: "",
+      photo_before_url: "",
+      version_group: family,
+      version_label: nextVersionLabel(recipe, recipes),
+      version_notes: "",
+    });
     setNotice("");
   }
 
@@ -696,12 +827,13 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-sm sm:min-w-[420px]">
+          <div className="grid grid-cols-2 gap-2 text-sm sm:min-w-[520px] sm:grid-cols-4">
             <Metric label="Recipes" value={String(recipes.length)} />
             <Metric
               label="Built in"
               value={String(recipes.filter((recipe) => recipe.built_in).length)}
             />
+            <Metric label="Version sets" value={String(versionSetCount)} />
             <Metric
               label="Avg rating"
               value={averageRating === null ? "None" : averageRating.toFixed(1)}
@@ -728,12 +860,12 @@ export default function Home() {
 
             <label className="mb-3 flex h-11 items-center gap-2 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--muted)]">
               <Search size={16} aria-hidden="true" />
-              <input
-                className="min-w-0 flex-1 bg-transparent text-[var(--foreground)] outline-none placeholder:text-[#777d72]"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search mango, gelato, fudge..."
-                value={query}
-              />
+                <input
+                  className="min-w-0 flex-1 bg-transparent text-[var(--foreground)] outline-none placeholder:text-[#777d72]"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search mango, v2, more fudge..."
+                  value={query}
+                />
             </label>
 
             <label className="mb-3 flex h-11 items-center gap-2 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--muted)]">
@@ -798,8 +930,16 @@ export default function Home() {
                         <h3 className="truncate text-sm font-semibold">
                           {recipe.name}
                         </h3>
+                        {recipe.version_label && (
+                          <VersionBadge label={recipe.version_label} />
+                        )}
                         {recipe.built_in && <BuiltInBadge />}
                       </div>
+                      {recipe.version_group && (
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          {recipe.version_group} - {versionSummary(recipe)}
+                        </p>
+                      )}
                       <p className="mt-1 text-xs text-[var(--muted)]">
                         {categoryText(recipe)} - {recipe.creami_setting}
                       </p>
@@ -848,6 +988,7 @@ export default function Home() {
                 busy={busy}
                 onDelete={() => deleteRecipe(selectedRecipe)}
                 onEdit={() => startEditing(selectedRecipe)}
+                onNewVersion={() => startNewVersion(selectedRecipe)}
                 onRate={(rating) =>
                   updateRecipeFields(
                     selectedRecipe.id,
@@ -856,10 +997,12 @@ export default function Home() {
                   )
                 }
                 onRemovePhoto={(stage) => removePhoto(selectedRecipe, stage)}
+                onSelectVersion={setSelectedId}
                 onUploadPhoto={(stage, event) =>
                   uploadPhoto(selectedRecipe, stage, event)
                 }
                 recipe={selectedRecipe}
+                versionRecipes={selectedVersionRecipes}
               />
             </>
           ) : (
@@ -909,6 +1052,17 @@ function BuiltInBadge() {
   return (
     <span className="rounded-md border border-[#43534a] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--mint)]">
       Built-in
+    </span>
+  );
+}
+
+function VersionBadge({ label }: { label: string }) {
+  return (
+    <span
+      className="inline-block max-w-[9rem] truncate rounded-md border border-[#4b5136] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[var(--amber)]"
+      title={label}
+    >
+      {label}
     </span>
   );
 }
@@ -1012,6 +1166,11 @@ function CreamiOfTheDayCard({
           <h2 className="text-2xl font-semibold tracking-normal">
             {recipe.name}
           </h2>
+          {recipe.version_group && (
+            <p className="mt-1 text-sm text-[#d8c98d]">
+              {recipe.version_group} - {versionSummary(recipe)}
+            </p>
+          )}
           <p className="mt-1 text-sm text-[var(--muted)]">
             {categoryText(recipe)} - {recipe.creami_setting || "No setting"}
           </p>
@@ -1063,21 +1222,27 @@ function RecipeDetail({
   busy,
   onDelete,
   onEdit,
+  onNewVersion,
   onRate,
   onRemovePhoto,
+  onSelectVersion,
   onUploadPhoto,
   recipe,
+  versionRecipes,
 }: {
   busy: string;
   onDelete: () => void;
   onEdit: () => void;
+  onNewVersion: () => void;
   onRate: (rating: number) => void;
   onRemovePhoto: (stage: "before" | "after") => void;
+  onSelectVersion: (recipeId: string) => void;
   onUploadPhoto: (
     stage: "before" | "after",
     event: ChangeEvent<HTMLInputElement>,
   ) => void;
   recipe: Recipe;
+  versionRecipes: Recipe[];
 }) {
   return (
     <div className="space-y-5">
@@ -1093,10 +1258,22 @@ function RecipeDetail({
                   <h2 className="text-3xl font-semibold tracking-normal">
                     {recipe.name}
                   </h2>
+                  {recipe.version_label && (
+                    <VersionBadge label={recipe.version_label} />
+                  )}
                   {recipe.built_in && <BuiltInBadge />}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
+                <button
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--amber)]"
+                  onClick={onNewVersion}
+                  title="Create a new version"
+                  type="button"
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  New version
+                </button>
                 <button
                   className="inline-flex h-10 items-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)]"
                   onClick={onEdit}
@@ -1117,9 +1294,10 @@ function RecipeDetail({
                 </button>
               </div>
             </div>
-            <div className="grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-3">
+            <div className="grid gap-3 text-sm text-[var(--muted)] sm:grid-cols-4">
               <span>Setting: {recipe.creami_setting || "Not logged"}</span>
               <span>Last made: {formatOptionalDate(recipe.last_made)}</span>
+              <span>Version: {versionSummary(recipe)}</span>
               <span>
                 Rating:{" "}
                 {recipe.family_rating === null
@@ -1165,6 +1343,13 @@ function RecipeDetail({
         <InfoPanel onEdit={onEdit} title="Category">
           <p>{categoryText(recipe)}</p>
         </InfoPanel>
+        <InfoPanel onEdit={onEdit} title="Recipe versions">
+          <VersionList
+            currentRecipeId={recipe.id}
+            onSelect={onSelectVersion}
+            recipes={versionRecipes}
+          />
+        </InfoPanel>
         <InfoPanel onEdit={onEdit} title="Last made">
           <p>{formatOptionalDate(recipe.last_made)}</p>
         </InfoPanel>
@@ -1186,6 +1371,50 @@ function RecipeDetail({
           <p>{recipe.notes || "No notes yet."}</p>
         </InfoPanel>
       </div>
+    </div>
+  );
+}
+
+function VersionList({
+  currentRecipeId,
+  onSelect,
+  recipes,
+}: {
+  currentRecipeId: string;
+  onSelect: (recipeId: string) => void;
+  recipes: Recipe[];
+}) {
+  if (!recipes.length) {
+    return <p>No version family yet.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {recipes.map((recipe) => {
+        const isCurrent = recipe.id === currentRecipeId;
+
+        return (
+          <button
+            className={`w-full rounded-md border px-3 py-2 text-left transition ${
+              isCurrent
+                ? "border-[var(--amber)] bg-[#171912]"
+                : "border-[var(--line)] bg-[#101411] hover:border-[#53625a]"
+            }`}
+            disabled={isCurrent}
+            key={recipe.id}
+            onClick={() => onSelect(recipe.id)}
+            type="button"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">{recipe.name}</span>
+              {recipe.version_label && <VersionBadge label={recipe.version_label} />}
+            </div>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              {versionSummary(recipe)}
+            </p>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1375,6 +1604,30 @@ function RecipeEditor({
             onChange={(event) => update("name", event.target.value)}
             required
             value={form.name}
+          />
+        </Field>
+        <Field label="Version family">
+          <input
+            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            onChange={(event) => update("version_group", event.target.value)}
+            placeholder="Banana Fudge Swirl"
+            value={form.version_group}
+          />
+        </Field>
+        <Field label="Version label">
+          <input
+            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            onChange={(event) => update("version_label", event.target.value)}
+            placeholder="v2 or Banana Split Edition"
+            value={form.version_label}
+          />
+        </Field>
+        <Field label="Version notes">
+          <input
+            className="h-11 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            onChange={(event) => update("version_notes", event.target.value)}
+            placeholder="more fudge"
+            value={form.version_notes}
           />
         </Field>
         <Field label="Category">

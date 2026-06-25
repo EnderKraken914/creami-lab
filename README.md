@@ -5,6 +5,7 @@ A calm recipe notebook for Ninja Creami experiments.
 ## What It Stores
 
 - Recipe name
+- Version family, label, and notes
 - Ingredients
 - Instructions as ordered steps
 - Creami setting used
@@ -18,6 +19,8 @@ A calm recipe notebook for Ninja Creami experiments.
 - Major and minor recipe categories
 - Daily deterministic Creami of the Day
 - 1-5 star family ratings
+- Recipe version families like `Banana Fudge Swirl` with labels like `v1`,
+  `v2`, or `Banana Split Edition`
 
 ## Local Setup
 

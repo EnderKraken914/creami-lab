@@ -31,6 +31,9 @@ export type Recipe = {
   created_at: string;
   updated_at: string;
   name: string;
+  version_group: string | null;
+  version_label: string | null;
+  version_notes: string;
   ingredients: string[];
   instructions: string[];
   creami_setting: string;
@@ -69,8 +72,17 @@ export const MINOR_CATEGORIES: MinorCategory[] = [
 
 const BUILT_IN_TIMESTAMP = "2026-06-25T00:00:00.000Z";
 
-function builtInRecipe(recipe: Omit<Recipe, "created_at" | "updated_at">): Recipe {
+function builtInRecipe(
+  recipe: Omit<
+    Recipe,
+    "created_at" | "updated_at" | "version_group" | "version_label" | "version_notes"
+  > &
+    Partial<Pick<Recipe, "version_group" | "version_label" | "version_notes">>,
+): Recipe {
   return {
+    version_group: null,
+    version_label: null,
+    version_notes: "",
     ...recipe,
     created_at: BUILT_IN_TIMESTAMP,
     updated_at: BUILT_IN_TIMESTAMP,
@@ -82,6 +94,8 @@ export const DEFAULT_RECIPES: Recipe[] = [
     id: "0b7f3bc4-8c76-4e8f-9fd1-3fbf20f08f62",
     slug: "banana-fudge-swirl-ice-cream",
     name: "Banana Fudge Swirl Ice Cream",
+    version_group: "Banana Fudge Swirl",
+    version_label: "v1",
     ingredients: [
       "3/4 cup + 1 tbsp heavy cream",
       "1 cup whole milk",
@@ -116,6 +130,8 @@ export const DEFAULT_RECIPES: Recipe[] = [
     id: "7b32868f-eef7-4288-a036-8b0dd50e505a",
     slug: "alphonso-mango-ice-cream",
     name: "Alphonso Mango Ice Cream",
+    version_group: "Alphonso Mango",
+    version_label: "Ice Cream",
     ingredients: [
       "3/4 cup + 1 tbsp heavy cream",
       "1 cup whole milk",
@@ -148,6 +164,8 @@ export const DEFAULT_RECIPES: Recipe[] = [
     id: "07bd6c0f-d460-44f0-bf21-8df85c0cdafd",
     slug: "alphonso-mango-kulfi",
     name: "Alphonso Mango Kulfi",
+    version_group: "Alphonso Mango",
+    version_label: "Kulfi",
     ingredients: [
       "1 cup whole milk",
       "1 cup heavy cream",
@@ -181,6 +199,8 @@ export const DEFAULT_RECIPES: Recipe[] = [
     id: "ebf7503f-6ad0-45f2-99a8-99d6ade56af1",
     slug: "triple-chocolate-gelato",
     name: "Triple Chocolate Gelato",
+    version_group: "Chocolate",
+    version_label: "Triple Chocolate Gelato",
     ingredients: [
       "4 egg yolks",
       "1/3 cup dark brown sugar",
@@ -217,6 +237,8 @@ export const DEFAULT_RECIPES: Recipe[] = [
     id: "38019c9e-f9c1-4a44-8b4b-99cfc09d75d0",
     slug: "strawberry-gelato",
     name: "Strawberry Gelato",
+    version_group: "Strawberry",
+    version_label: "Gelato",
     ingredients: [
       "4 egg yolks",
       "1/3 cup dark brown sugar",
@@ -253,6 +275,8 @@ export const DEFAULT_RECIPES: Recipe[] = [
     id: "ad0da0e6-6516-451e-b9fa-736268b71ea5",
     slug: "banana-gelato",
     name: "Banana Gelato",
+    version_group: "Banana",
+    version_label: "Gelato",
     ingredients: [
       "4 egg yolks",
       "1/3 cup dark brown sugar",
@@ -288,6 +312,8 @@ export const DEFAULT_RECIPES: Recipe[] = [
     id: "76d3e8ee-2c11-4de7-bdf7-2fe5f07b9da3",
     slug: "marshmallow-ice-cream",
     name: "Marshmallow Ice Cream",
+    version_group: "Marshmallow",
+    version_label: "Ice Cream",
     ingredients: [
       "3/4 cup + 1 tbsp heavy cream",
       "1 cup whole milk",
