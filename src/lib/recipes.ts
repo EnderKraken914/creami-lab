@@ -25,29 +25,77 @@ export type MinorCategory = {
   name: string;
 };
 
+export type RecipePhoto = {
+  id: string;
+  label: string;
+  url: string;
+  path: string | null;
+  created_at: string;
+};
+
+export type RecipeExperiment = {
+  id: string;
+  date: string;
+  what_changed: string;
+  why_changed: string;
+  result: string;
+  texture_notes: string;
+  flavor_notes: string;
+  sweetness_notes: string;
+  family_reaction: string;
+  would_repeat: boolean;
+};
+
 export type Recipe = {
   id: string;
   slug: string | null;
   created_at: string;
   updated_at: string;
   name: string;
+  description: string;
   version_group: string | null;
   version_label: string | null;
+  version_number: number | null;
   version_notes: string;
   ingredients: string[];
   instructions: string[];
   creami_setting: string;
+  prep_time: string;
+  freeze_time: string;
+  spin_setting: string;
+  program_used: string;
+  respin_count: number;
+  respin_liquid: string;
+  respin_liquid_amount: string;
+  respin_instructions: string;
   mix_ins: string;
+  mix_in_amount: string;
+  mix_in_timing: string;
+  mix_in_instructions: string;
   family_rating: number | null;
+  personal_rating: number | null;
   notes: string;
   tags: string[];
   photo_before_url: string | null;
   photo_before_path: string | null;
   photo_after_url: string | null;
   photo_after_path: string | null;
+  photos: RecipePhoto[];
   built_in: boolean;
   last_made: string | null;
   minor_category_slug: MinorCategorySlug | null;
+  serving_size: string;
+  source_origin: string;
+  difficulty: string;
+  texture_result: string;
+  sweetness_result: string;
+  flavor_strength_result: string;
+  spin_notes: string;
+  favorite: boolean;
+  family_approved: boolean;
+  tested: boolean;
+  would_make_again: boolean;
+  experiments: RecipeExperiment[];
 };
 
 export type RecipeReview = {
@@ -57,7 +105,90 @@ export type RecipeReview = {
   reviewer_name: string;
   rating: number;
   notes: string;
+  would_eat_again: boolean;
 };
+
+export const PHOTO_LABELS = [
+  "Base before freezing",
+  "Frozen pint",
+  "After first spin",
+  "After respin",
+  "Final serving",
+  "Family serving / plated dessert",
+] as const;
+
+export const CREAMI_PROGRAMS = [
+  "Ice Cream",
+  "Gelato",
+  "Sorbet",
+  "Lite Ice Cream",
+  "Milkshake",
+  "Mix-In",
+  "CreamiFit",
+  "Soft Serve",
+] as const;
+
+export const TEXTURE_RESULTS = [
+  "Creamy",
+  "Icy",
+  "Crumbly",
+  "Gummy",
+  "Too soft",
+  "Perfect",
+] as const;
+
+export const RESULT_LEVELS = [
+  "Too low",
+  "Mild",
+  "Balanced",
+  "Strong",
+  "Too strong",
+] as const;
+
+export const DIFFICULTY_LEVELS = ["Easy", "Medium", "Project"] as const;
+
+export const MIX_IN_TIMINGS = [
+  "Before spinning",
+  "After spinning",
+  "After respin",
+] as const;
+
+export const SUGGESTED_TAGS = [
+  "family approved",
+  "dad favorite",
+  "mom request",
+  "fruit",
+  "chocolate",
+  "mango",
+  "banana",
+  "peach",
+  "strawberry",
+  "fudge swirl",
+  "kulfi",
+  "gelato",
+  "no mix-ins",
+  "halal",
+  "tested",
+  "needs testing",
+  "store-bought inspired",
+  "indian dessert",
+  "banana split",
+  "summer",
+  "rich",
+  "light",
+  "creamy",
+] as const;
+
+export const DEFAULT_STANDARDS = [
+  "Taste before freezing.",
+  "Frozen desserts taste less sweet than the liquid base.",
+  "Fruit bases should taste slightly stronger and sweeter before freezing.",
+  "Standard xanthan gum amount: 1/4 tsp per pint unless testing otherwise.",
+  "Use a pinch of salt to boost flavor.",
+  "Chilled fudge works best for fudge streaks.",
+  "Use Mix-In for ribbons/pockets, not perfect swirls.",
+  "Label whether a recipe is tested or still experimental.",
+] as const;
 
 export const MAJOR_CATEGORIES: MajorCategory[] = [
   { slug: "scoop", name: "Scoop" },
@@ -84,14 +215,74 @@ const BUILT_IN_TIMESTAMP = "2026-06-25T00:00:00.000Z";
 function builtInRecipe(
   recipe: Omit<
     Recipe,
-    "created_at" | "updated_at" | "version_group" | "version_label" | "version_notes"
+    | "created_at"
+    | "updated_at"
+    | "description"
+    | "version_group"
+    | "version_label"
+    | "version_number"
+    | "version_notes"
+    | "prep_time"
+    | "freeze_time"
+    | "spin_setting"
+    | "program_used"
+    | "respin_count"
+    | "respin_liquid"
+    | "respin_liquid_amount"
+    | "respin_instructions"
+    | "mix_in_amount"
+    | "mix_in_timing"
+    | "mix_in_instructions"
+    | "personal_rating"
+    | "photos"
+    | "serving_size"
+    | "source_origin"
+    | "difficulty"
+    | "texture_result"
+    | "sweetness_result"
+    | "flavor_strength_result"
+    | "spin_notes"
+    | "favorite"
+    | "family_approved"
+    | "tested"
+    | "would_make_again"
+    | "experiments"
   > &
     Partial<Pick<Recipe, "version_group" | "version_label" | "version_notes">>,
 ): Recipe {
   return {
+    description: "",
     version_group: null,
     version_label: null,
+    version_number: null,
     version_notes: "",
+    prep_time: "",
+    freeze_time: "18-24 hours",
+    spin_setting: recipe.creami_setting,
+    program_used: recipe.creami_setting.split(",")[0]?.trim() || "",
+    respin_count: recipe.creami_setting.toLowerCase().includes("respin")
+      ? 1
+      : 0,
+    respin_liquid: "",
+    respin_liquid_amount: "",
+    respin_instructions: "",
+    mix_in_amount: "",
+    mix_in_timing: recipe.mix_ins ? "After spinning" : "",
+    mix_in_instructions: recipe.mix_ins ? "Run Mix-In once." : "",
+    personal_rating: null,
+    photos: [],
+    serving_size: "1 pint",
+    source_origin: "Creami Lab built-in",
+    difficulty: "",
+    texture_result: "",
+    sweetness_result: "",
+    flavor_strength_result: "",
+    spin_notes: "",
+    favorite: false,
+    family_approved: recipe.tags.includes("family approved"),
+    tested: recipe.tags.includes("tested"),
+    would_make_again: false,
+    experiments: [],
     ...recipe,
     created_at: BUILT_IN_TIMESTAMP,
     updated_at: BUILT_IN_TIMESTAMP,
@@ -112,21 +303,23 @@ export const DEFAULT_RECIPES: Recipe[] = [
       "1/4 cup sugar",
       "1 tsp vanilla extract",
       "Pinch sea salt",
-      "1/8 tsp xanthan gum",
+      "1/4 tsp xanthan gum",
+      "4 tbsp chilled chocolate fudge, for mix-in",
     ],
     instructions: [
-      "Blend all ingredients until smooth.",
+      "Blend cream, milk, banana, sugar, vanilla, salt, and xanthan gum until smooth.",
+      "Taste and adjust.",
       "Freeze for 18-24 hours.",
       "Run Ice Cream.",
       "If crumbly, add 1 tbsp milk and Respin.",
-      "Add 4 tbsp chilled chocolate fudge.",
-      "Run Mix-In.",
+      "Add chilled fudge.",
+      "Run Mix-In once.",
     ],
     creami_setting: "Ice Cream, Respin if needed, Mix-In",
     mix_ins: "4 tbsp chilled chocolate fudge",
     family_rating: null,
     notes: "",
-    tags: ["banana", "fudge swirl", "ice cream"],
+    tags: ["banana", "fudge swirl", "family approved"],
     photo_before_url: null,
     photo_before_path: null,
     photo_after_url: null,
@@ -147,11 +340,11 @@ export const DEFAULT_RECIPES: Recipe[] = [
       "1 1/2 cups Alphonso mango",
       "4 tbsp sugar",
       "Pinch sea salt",
-      "1/8 tsp xanthan gum",
+      "1/4 tsp xanthan gum",
     ],
     instructions: [
       "Blend until smooth.",
-      "Taste and adjust sweetness.",
+      "Taste and adjust.",
       "Freeze for 18-24 hours.",
       "Run Ice Cream.",
       "Respin only if needed.",
@@ -160,7 +353,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     mix_ins: "",
     family_rating: null,
     notes: "",
-    tags: ["alphonso mango", "mango", "ice cream"],
+    tags: ["mango", "alphonso", "fruit"],
     photo_before_url: null,
     photo_before_path: null,
     photo_after_url: null,
@@ -182,20 +375,20 @@ export const DEFAULT_RECIPES: Recipe[] = [
       "4 tbsp sugar",
       "1/4 tsp ground cardamom",
       "Pinch sea salt",
-      "1/8 tsp xanthan gum",
+      "1/4 tsp xanthan gum",
     ],
     instructions: [
       "Blend until smooth.",
-      "Taste and adjust.",
+      "Taste and adjust sweetness/cardamom.",
       "Freeze for 18-24 hours.",
       "Run Ice Cream.",
-      "Optional: Mix in pistachios.",
+      "Respin only if needed.",
     ],
     creami_setting: "Ice Cream, optional Mix-In",
-    mix_ins: "Pistachios, optional",
+    mix_ins: "",
     family_rating: null,
-    notes: "",
-    tags: ["alphonso mango", "mango", "kulfi", "cardamom"],
+    notes: "Dad said it tastes like real kulfi.",
+    tags: ["mango", "alphonso", "indian dessert", "family approved", "dad favorite"],
     photo_before_url: null,
     photo_before_path: null,
     photo_after_url: null,
@@ -203,6 +396,43 @@ export const DEFAULT_RECIPES: Recipe[] = [
     built_in: true,
     last_made: null,
     minor_category_slug: "kulfi",
+  }),
+  builtInRecipe({
+    id: "b7d003f2-8d29-4bf3-9fb7-7f3665404269",
+    slug: "peaches-and-cream-ice-cream",
+    name: "Peaches and Cream Ice Cream",
+    version_group: "Peaches and Cream",
+    version_label: "v1",
+    ingredients: [
+      "3/4 cup + 1 tbsp heavy cream",
+      "1 cup whole milk",
+      "1 1/4 to 1 1/2 cups canned peaches, drained",
+      "2 tbsp reserved peach juice",
+      "3 tbsp sugar, adjust to taste",
+      "1 tsp vanilla extract",
+      "Pinch sea salt",
+      "1/4 tsp xanthan gum",
+    ],
+    instructions: [
+      "Drain peaches and reserve 2 tbsp juice.",
+      "Blend peaches, juice, cream, milk, sugar, vanilla, salt, and xanthan gum until smooth.",
+      "Taste. It should taste like an amazing peach milkshake.",
+      "Freeze for 18-24 hours.",
+      "Run Ice Cream.",
+      "Respin only if needed.",
+    ],
+    creami_setting: "Ice Cream, Respin if needed",
+    mix_ins: "",
+    family_rating: null,
+    notes: "",
+    tags: ["peach", "fruit", "store-bought inspired", "mom request"],
+    photo_before_url: null,
+    photo_before_path: null,
+    photo_after_url: null,
+    photo_after_path: null,
+    built_in: true,
+    last_made: null,
+    minor_category_slug: "ice-cream",
   }),
   builtInRecipe({
     id: "ebf7503f-6ad0-45f2-99a8-99d6ade56af1",
@@ -233,7 +463,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     mix_ins: "2 tbsp chopped chocolate chunks",
     family_rating: null,
     notes: "",
-    tags: ["chocolate", "gelato", "fudge"],
+    tags: ["chocolate", "gelato", "ninja inspired"],
     photo_before_url: null,
     photo_before_path: null,
     photo_after_url: null,
@@ -256,13 +486,14 @@ export const DEFAULT_RECIPES: Recipe[] = [
       "1 1/4 cups strawberry puree",
       "1 tsp lemon juice",
       "Pinch sea salt",
-      "1/8 tsp xanthan gum",
+      "1/4 tsp xanthan gum",
     ],
     instructions: [
-      "Blend strawberries.",
-      "Make custard with yolks, sugar, milk and cream.",
-      "Stir in strawberry puree.",
-      "Add lemon juice, salt and xanthan gum.",
+      "Blend strawberries into puree.",
+      "Whisk egg yolks and brown sugar.",
+      "Add cream and milk.",
+      "Cook gently until custard coats the back of a spoon.",
+      "Stir in strawberry puree, lemon juice, salt, and xanthan gum.",
       "Chill completely.",
       "Freeze for 24 hours.",
       "Run Gelato.",
@@ -271,7 +502,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     mix_ins: "",
     family_rating: null,
     notes: "",
-    tags: ["strawberry", "gelato"],
+    tags: ["strawberry", "gelato", "banana split"],
     photo_before_url: null,
     photo_before_path: null,
     photo_after_url: null,
@@ -295,12 +526,14 @@ export const DEFAULT_RECIPES: Recipe[] = [
       "1 tsp vanilla extract",
       "1 tbsp chocolate fudge topping",
       "Pinch sea salt",
-      "1/8 tsp xanthan gum",
+      "1/4 tsp xanthan gum",
     ],
     instructions: [
-      "Make custard.",
-      "Blend custard with banana, vanilla, fudge, salt and xanthan gum.",
-      "Chill.",
+      "Whisk egg yolks and brown sugar.",
+      "Add cream and milk.",
+      "Cook gently until custard coats the back of a spoon.",
+      "Blend custard with banana, vanilla, fudge, salt, and xanthan gum.",
+      "Chill completely.",
       "Freeze for 24 hours.",
       "Run Gelato.",
     ],
@@ -308,7 +541,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     mix_ins: "",
     family_rating: null,
     notes: "",
-    tags: ["banana", "gelato", "fudge"],
+    tags: ["banana", "gelato", "banana split"],
     photo_before_url: null,
     photo_before_path: null,
     photo_after_url: null,
@@ -326,16 +559,16 @@ export const DEFAULT_RECIPES: Recipe[] = [
     ingredients: [
       "3/4 cup + 1 tbsp heavy cream",
       "1 cup whole milk",
-      "1-1 1/4 cups halal marshmallows",
+      "1 to 1 1/4 cups halal marshmallows",
       "1/4 cup sugar",
       "1 tsp vanilla extract",
       "Pinch sea salt",
     ],
     instructions: [
-      "Heat the milk.",
-      "Melt marshmallows completely.",
-      "Stir in remaining ingredients.",
-      "Cool.",
+      "Heat the milk gently.",
+      "Melt marshmallows into the milk completely.",
+      "Stir in cream, sugar, vanilla, and salt.",
+      "Cool completely.",
       "Freeze for 18-24 hours.",
       "Run Ice Cream.",
     ],
@@ -343,7 +576,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     mix_ins: "",
     family_rating: null,
     notes: "",
-    tags: ["marshmallow", "ice cream"],
+    tags: ["marshmallow", "halal"],
     photo_before_url: null,
     photo_before_path: null,
     photo_after_url: null,
