@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { BookOpen, ChefHat, Shuffle, Star } from "lucide-react";
+import { BookOpen, ChefHat, ListChecks, Shuffle, Star } from "lucide-react";
+import { PINT_RULES } from "@/lib/rules";
 
 export default function HomePage() {
   return (
@@ -76,6 +77,41 @@ export default function HomePage() {
             title="Visitor Reviews"
             text="Visitors can leave their name, stars, and notes; recipes show the average and full review list."
           />
+        </div>
+      </section>
+
+      <section
+        className="border-t border-[var(--line)] bg-[#0f1311]"
+        id="our-rules"
+      >
+        <div className="mx-auto max-w-6xl px-5 py-9 sm:px-8 sm:py-11">
+          <div className="mb-5 flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--line)] text-[var(--mint)]">
+              <ListChecks size={20} aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm text-[var(--muted)]">
+                Constant rules for every pint
+              </p>
+              <h2 className="text-2xl font-semibold">Our Rules</h2>
+            </div>
+          </div>
+
+          <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {PINT_RULES.map((rule, index) => (
+              <li
+                className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-4"
+                key={rule}
+              >
+                <span className="mb-3 flex h-7 w-7 items-center justify-center rounded-md border border-[#4b5136] text-xs font-semibold text-[var(--amber)]">
+                  {index + 1}
+                </span>
+                <p className="break-words text-sm leading-6 text-[#ddd9cf]">
+                  {rule}
+                </p>
+              </li>
+            ))}
+          </ol>
         </div>
       </section>
     </main>

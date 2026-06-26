@@ -7,6 +7,7 @@ import {
   ChefHat,
   Edit3,
   ImagePlus,
+  ListChecks,
   Plus,
   Search,
   SlidersHorizontal,
@@ -16,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { PINT_RULES } from "@/lib/rules";
 import { getSupabaseClient, PHOTO_BUCKET } from "@/lib/supabase";
 import {
   DEFAULT_RECIPES,
@@ -1147,6 +1149,8 @@ export default function RecipeWorkspace() {
             </label>
           </div>
 
+          <PintRulesPanel />
+
           <div className="space-y-3">
             {isLoading ? (
               <div className="rounded-md border border-[var(--line)] bg-[var(--panel)] p-4 text-sm text-[var(--muted)]">
@@ -1291,6 +1295,37 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-[var(--muted)]">{label}</p>
       <p className="mt-1 truncate text-lg font-semibold sm:text-xl">{value}</p>
     </div>
+  );
+}
+
+function PintRulesPanel() {
+  return (
+    <section className="min-w-0 rounded-md border border-[#39443e] bg-[#101411] p-3 sm:p-4">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--line)] text-[var(--mint)]">
+          <ListChecks size={16} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs text-[var(--muted)]">
+            Constant rules for every pint
+          </p>
+          <h2 className="text-base font-semibold">Our Rules</h2>
+        </div>
+      </div>
+
+      <ol className="mt-3 space-y-2">
+        {PINT_RULES.map((rule, index) => (
+          <li className="flex min-w-0 gap-2 text-sm" key={rule}>
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-[#4b5136] text-[10px] font-semibold text-[var(--amber)]">
+              {index + 1}
+            </span>
+            <span className="min-w-0 break-words leading-6 text-[var(--muted)]">
+              {rule}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
