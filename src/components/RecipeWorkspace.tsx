@@ -23,6 +23,7 @@ import {
   MINOR_CATEGORIES,
   getMajorForMinor,
   getMinorCategory,
+  type MajorCategorySlug,
   type MinorCategorySlug,
   type Recipe,
   type RecipeReview,
@@ -47,6 +48,7 @@ type RecipeForm = {
   photo_after_path: string;
   built_in: boolean;
   last_made: string;
+  major_category_slug: MajorCategorySlug;
   minor_category_slug: MinorCategorySlug | "";
 };
 
@@ -61,6 +63,14 @@ type RecipeFieldPatch = Omit<Partial<Recipe>, "family_rating">;
 const LOCAL_STORAGE_KEY = "creami-lab-recipes-v2";
 const LOCAL_STORAGE_REVIEWS_KEY = "creami-lab-reviews-v1";
 const STAR_VALUES = [1, 2, 3, 4, 5] as const;
+
+function minorCategoriesForMajor(majorSlug: MajorCategorySlug) {
+  return MINOR_CATEGORIES.filter((minor) => minor.major_slug === majorSlug);
+}
+
+function firstMinorForMajor(majorSlug: MajorCategorySlug) {
+  return minorCategoriesForMajor(majorSlug)[0]?.slug ?? "ice-cream";
+}
 
 const emptyForm: RecipeForm = {
   name: "",
@@ -79,6 +89,7 @@ const emptyForm: RecipeForm = {
   photo_after_path: "",
   built_in: false,
   last_made: "",
+  major_category_slug: "scoop",
   minor_category_slug: "ice-cream",
 };
 
@@ -295,6 +306,9 @@ function sortRecipes(recipes: Recipe[]) {
 }
 
 function toForm(recipe: Recipe): RecipeForm {
+  const majorCategorySlug =
+    getMajorForMinor(recipe.minor_category_slug)?.slug ?? "scoop";
+
   return {
     id: recipe.id,
     slug: recipe.slug,
@@ -314,7 +328,9 @@ function toForm(recipe: Recipe): RecipeForm {
     photo_after_path: recipe.photo_after_path ?? "",
     built_in: recipe.built_in,
     last_made: recipe.last_made ?? "",
-    minor_category_slug: recipe.minor_category_slug ?? "",
+    major_category_slug: majorCategorySlug,
+    minor_category_slug:
+      recipe.minor_category_slug ?? firstMinorForMajor(majorCategorySlug),
   };
 }
 
@@ -337,7 +353,8 @@ function formToPayload(form: RecipeForm) {
     photo_after_path: form.photo_after_path.trim() || null,
     built_in: form.built_in,
     last_made: form.last_made || null,
-    minor_category_slug: form.minor_category_slug || null,
+    minor_category_slug:
+      form.minor_category_slug || firstMinorForMajor(form.major_category_slug),
   };
 }
 
@@ -407,7 +424,12 @@ export default function RecipeWorkspace() {
   const [reviewForm, setReviewForm] = useState<ReviewForm>(emptyReviewForm);
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [majorCategoryFilter, setMajorCategoryFilter] = useState<
+    MajorCategorySlug | "all"
+  >("all");
+  const [categoryFilter, setCategoryFilter] = useState<
+    MinorCategorySlug | "all"
+  >("all");
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
@@ -460,6 +482,13 @@ export default function RecipeWorkspace() {
       ),
     [recipes],
   );
+  const filteredMinorCategories = useMemo(
+    () =>
+      majorCategoryFilter === "all"
+        ? MINOR_CATEGORIES
+        : minorCategoriesForMajor(majorCategoryFilter),
+    [majorCategoryFilter],
+  );
 
   const filteredRecipes = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -485,14 +514,22 @@ export default function RecipeWorkspace() {
           !normalizedQuery || searchable.includes(normalizedQuery);
         const matchesTag =
           tagFilter === "all" || recipe.tags.includes(tagFilter);
-        const matchesCategory =
+        const recipeMajorSlug = getMajorForMinor(
+          recipe.minor_category_slug,
+        )?.slug;
+        const matchesMajorCategory =
+          majorCategoryFilter === "all" ||
+          recipeMajorSlug === majorCategoryFilter;
+        const matchesMinorCategory =
           categoryFilter === "all" ||
           recipe.minor_category_slug === categoryFilter;
 
-        return matchesQuery && matchesTag && matchesCategory;
+        return (
+          matchesQuery && matchesTag && matchesMajorCategory && matchesMinorCategory
+        );
       }),
     );
-  }, [categoryFilter, query, recipes, tagFilter]);
+  }, [categoryFilter, majorCategoryFilter, query, recipes, tagFilter]);
 
   const reviewedRecipes = recipes.filter((recipe) =>
     reviews.some((review) => review.recipe_id === recipe.id),
@@ -591,6 +628,18 @@ export default function RecipeWorkspace() {
   function selectRecipe(recipeId: string) {
     setSelectedId(recipeId);
     setReviewForm(emptyReviewForm);
+  }
+
+  function changeMajorCategoryFilter(value: MajorCategorySlug | "all") {
+    setMajorCategoryFilter(value);
+
+    if (value !== "all") {
+      const selectedMinor = getMinorCategory(categoryFilter);
+
+      if (selectedMinor && selectedMinor.major_slug !== value) {
+        setCategoryFilter("all");
+      }
+    }
   }
 
   function startNewRecipe() {
@@ -1045,20 +1094,38 @@ export default function RecipeWorkspace() {
               <SlidersHorizontal size={16} aria-hidden="true" />
               <select
                 className="min-w-0 flex-1 bg-transparent text-[var(--foreground)] outline-none"
-                onChange={(event) => setCategoryFilter(event.target.value)}
+                onChange={(event) =>
+                  changeMajorCategoryFilter(
+                    event.target.value as MajorCategorySlug | "all",
+                  )
+                }
+                value={majorCategoryFilter}
+              >
+                <option value="all">All major categories</option>
+                {MAJOR_CATEGORIES.map((major) => (
+                  <option key={major.slug} value={major.slug}>
+                    {major.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mb-3 flex h-11 items-center gap-2 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--muted)]">
+              <SlidersHorizontal size={16} aria-hidden="true" />
+              <select
+                className="min-w-0 flex-1 bg-transparent text-[var(--foreground)] outline-none"
+                onChange={(event) =>
+                  setCategoryFilter(
+                    event.target.value as MinorCategorySlug | "all",
+                  )
+                }
                 value={categoryFilter}
               >
-                <option value="all">All categories</option>
-                {MAJOR_CATEGORIES.map((major) => (
-                  <optgroup key={major.slug} label={major.name}>
-                    {MINOR_CATEGORIES.filter(
-                      (minor) => minor.major_slug === major.slug,
-                    ).map((minor) => (
-                      <option key={minor.slug} value={minor.slug}>
-                        {minor.name}
-                      </option>
-                    ))}
-                  </optgroup>
+                <option value="all">All minor categories</option>
+                {filteredMinorCategories.map((minor) => (
+                  <option key={minor.slug} value={minor.slug}>
+                    {minor.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -1954,6 +2021,16 @@ function RecipeEditor({
     onChange({ ...form, [key]: value });
   }
 
+  const editorMinorCategories = minorCategoriesForMajor(form.major_category_slug);
+
+  function updateMajorCategory(majorSlug: MajorCategorySlug) {
+    onChange({
+      ...form,
+      major_category_slug: majorSlug,
+      minor_category_slug: firstMinorForMajor(majorSlug),
+    });
+  }
+
   return (
     <form
       className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-4 sm:p-5"
@@ -2021,7 +2098,22 @@ function RecipeEditor({
             value={form.version_notes}
           />
         </Field>
-        <Field label="Category">
+        <Field label="Major Category">
+          <select
+            className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+            onChange={(event) =>
+              updateMajorCategory(event.target.value as MajorCategorySlug)
+            }
+            value={form.major_category_slug}
+          >
+            {MAJOR_CATEGORIES.map((major) => (
+              <option key={major.slug} value={major.slug}>
+                {major.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Minor Category">
           <select
             className="h-11 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
             onChange={(event) =>
@@ -2032,16 +2124,10 @@ function RecipeEditor({
             }
             value={form.minor_category_slug}
           >
-            {MAJOR_CATEGORIES.map((major) => (
-              <optgroup key={major.slug} label={major.name}>
-                {MINOR_CATEGORIES.filter(
-                  (minor) => minor.major_slug === major.slug,
-                ).map((minor) => (
-                  <option key={minor.slug} value={minor.slug}>
-                    {minor.name}
-                  </option>
-                ))}
-              </optgroup>
+            {editorMinorCategories.map((minor) => (
+              <option key={minor.slug} value={minor.slug}>
+                {minor.name}
+              </option>
             ))}
           </select>
         </Field>
