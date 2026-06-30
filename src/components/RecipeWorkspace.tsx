@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import AdminLogin, { type AdminSessionState } from "@/components/AdminLogin";
 import { PINT_RULES } from "@/lib/rules";
 import { getSupabaseClient, PHOTO_BUCKET } from "@/lib/supabase";
 import {
@@ -836,11 +837,20 @@ function buildShoppingItems(recipes: Recipe[]) {
 
 export default function RecipeWorkspace() {
   const supabase = useMemo(() => getSupabaseClient(), []);
+  const [adminSession, setAdminSession] = useState<AdminSessionState>({
+    email: "",
+    isAdmin: false,
+    isSignedIn: false,
+    status: "checking",
+  });
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [reviews, setReviews] = useState<RecipeReview[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [editing, setEditing] = useState<RecipeForm | null>(null);
   const [reviewForm, setReviewForm] = useState<ReviewForm>(emptyReviewForm);
+  const [editingReviewId, setEditingReviewId] = useState("");
+  const [reviewEditForm, setReviewEditForm] =
+    useState<ReviewForm>(emptyReviewForm);
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState("all");
   const [majorCategoryFilter, setMajorCategoryFilter] = useState<
@@ -868,6 +878,7 @@ export default function RecipeWorkspace() {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const canManageRecipes = !supabase || adminSession.isAdmin;
 
   const sortedRecipes = useMemo(() => sortRecipes(recipes), [recipes]);
   const selectedRecipe =
@@ -1132,6 +1143,8 @@ export default function RecipeWorkspace() {
   function selectRecipe(recipeId: string) {
     setSelectedId(recipeId);
     setReviewForm(emptyReviewForm);
+    setEditingReviewId("");
+    setReviewEditForm(emptyReviewForm);
   }
 
   function changeMajorCategoryFilter(value: MajorCategorySlug | "all") {
@@ -1146,7 +1159,21 @@ export default function RecipeWorkspace() {
     }
   }
 
+  function requireAdmin(action = "change recipes") {
+    if (canManageRecipes) {
+      return true;
+    }
+
+    setError(`Admin login required to ${action}.`);
+    setNotice("");
+    return false;
+  }
+
   function startNewRecipe() {
+    if (!requireAdmin("add recipes")) {
+      return;
+    }
+
     setEditing({
       ...emptyForm,
       name: "New Creami Pint",
@@ -1156,6 +1183,10 @@ export default function RecipeWorkspace() {
   }
 
   function startEditing(recipe: Recipe | null) {
+    if (!requireAdmin("edit recipes")) {
+      return;
+    }
+
     if (!recipe) {
       startNewRecipe();
       return;
@@ -1166,6 +1197,10 @@ export default function RecipeWorkspace() {
   }
 
   function startNewVersion(recipe: Recipe | null) {
+    if (!requireAdmin("create recipe versions")) {
+      return;
+    }
+
     if (!recipe) {
       startNewRecipe();
       return;
@@ -1201,6 +1236,10 @@ export default function RecipeWorkspace() {
     event.preventDefault();
 
     if (!editing) {
+      return;
+    }
+
+    if (!requireAdmin("save recipes")) {
       return;
     }
 
@@ -1276,6 +1315,10 @@ export default function RecipeWorkspace() {
     fields: RecipeFieldPatch,
     successMessage: string,
   ) {
+    if (!requireAdmin("update recipes")) {
+      return;
+    }
+
     setBusy(recipeId);
     setError("");
     setNotice("");
@@ -1385,6 +1428,90 @@ export default function RecipeWorkspace() {
     setBusy("");
   }
 
+  function startEditingReview(review: RecipeReview) {
+    setEditingReviewId(review.id);
+    setReviewEditForm({
+      reviewer_name: review.reviewer_name,
+      rating: String(review.rating),
+      notes: review.notes,
+      would_eat_again: review.would_eat_again,
+    });
+    setError("");
+    setNotice("");
+  }
+
+  function cancelEditingReview() {
+    setEditingReviewId("");
+    setReviewEditForm(emptyReviewForm);
+  }
+
+  async function saveReviewEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingReviewId) {
+      return;
+    }
+
+    const reviewerName = reviewEditForm.reviewer_name.trim();
+    const rating = normalizeRating(reviewEditForm.rating);
+
+    if (!reviewerName) {
+      setError("Add a name before updating the review.");
+      return;
+    }
+
+    if (rating === null) {
+      setError("Choose a star rating before updating the review.");
+      return;
+    }
+
+    setBusy(`review-edit:${editingReviewId}`);
+    setError("");
+    setNotice("");
+
+    const payload = {
+      reviewer_name: reviewerName,
+      rating,
+      notes: reviewEditForm.notes.trim(),
+      would_eat_again: reviewEditForm.would_eat_again,
+    };
+
+    if (!supabase) {
+      setReviews((current) =>
+        current.map((review) =>
+          review.id === editingReviewId ? { ...review, ...payload } : review,
+        ),
+      );
+      cancelEditingReview();
+      setNotice("Review updated locally.");
+      setBusy("");
+      return;
+    }
+
+    const { data, error: reviewError } = await supabase
+      .from("recipe_reviews")
+      .update(payload)
+      .eq("id", editingReviewId)
+      .select("*")
+      .single();
+
+    if (reviewError) {
+      setError(reviewError.message);
+      setBusy("");
+      return;
+    }
+
+    const updatedReview = normalizeReview(data);
+    setReviews((current) =>
+      current.map((review) =>
+        review.id === updatedReview.id ? updatedReview : review,
+      ),
+    );
+    cancelEditingReview();
+    setNotice("Review updated.");
+    setBusy("");
+  }
+
   async function deleteReview(review: RecipeReview) {
     setBusy(`review-delete:${review.id}`);
     setError("");
@@ -1417,6 +1544,10 @@ export default function RecipeWorkspace() {
     event.target.value = "";
 
     if (!recipe || !file) {
+      return;
+    }
+
+    if (!requireAdmin("upload recipe photos")) {
       return;
     }
 
@@ -1472,6 +1603,10 @@ export default function RecipeWorkspace() {
       return;
     }
 
+    if (!requireAdmin("remove recipe photos")) {
+      return;
+    }
+
     const path =
       stage === "before" ? recipe.photo_before_path : recipe.photo_after_path;
 
@@ -1498,6 +1633,10 @@ export default function RecipeWorkspace() {
     event.target.value = "";
 
     if (!recipe || !file) {
+      return;
+    }
+
+    if (!requireAdmin("upload recipe photos")) {
       return;
     }
 
@@ -1562,6 +1701,10 @@ export default function RecipeWorkspace() {
       return;
     }
 
+    if (!requireAdmin("remove recipe photos")) {
+      return;
+    }
+
     const photo = recipe.photos.find((item) => item.label === label);
 
     if (supabase && photo?.path) {
@@ -1577,6 +1720,10 @@ export default function RecipeWorkspace() {
 
   async function deleteRecipe(recipe: Recipe | null) {
     if (!recipe) {
+      return;
+    }
+
+    if (!requireAdmin("delete recipes")) {
       return;
     }
 
@@ -1651,6 +1798,10 @@ export default function RecipeWorkspace() {
       return;
     }
 
+    if (!requireAdmin("save experiments")) {
+      return;
+    }
+
     const entry: RecipeExperiment = {
       id: crypto.randomUUID(),
       date: experimentForm.date || getTodayInputDate(),
@@ -1678,6 +1829,10 @@ export default function RecipeWorkspace() {
   }
 
   async function deleteExperiment(recipe: Recipe, experimentId: string) {
+    if (!requireAdmin("delete experiments")) {
+      return;
+    }
+
     await updateRecipeFields(
       recipe.id,
       {
@@ -1730,6 +1885,10 @@ export default function RecipeWorkspace() {
     event.target.value = "";
 
     if (!file) {
+      return;
+    }
+
+    if (!requireAdmin("import recipes")) {
       return;
     }
 
@@ -1848,6 +2007,7 @@ export default function RecipeWorkspace() {
               >
                 Converter
               </Link>
+              <AdminLogin onSessionChange={setAdminSession} />
             </div>
             <div className="grid min-w-0 grid-cols-2 gap-2 text-sm xl:grid-cols-4">
               <Metric label="Recipes" value={String(recipes.length)} />
@@ -1871,15 +2031,21 @@ export default function RecipeWorkspace() {
           <div className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-3 sm:p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-base font-semibold">Recipes</h2>
-              <button
-                className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--mint)] px-3 text-sm font-semibold text-[#10201a] transition hover:brightness-110"
-                onClick={startNewRecipe}
-                title="Add recipe"
-                type="button"
-              >
-                <Plus size={16} aria-hidden="true" />
-                Add
-              </button>
+              {canManageRecipes ? (
+                <button
+                  className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--mint)] px-3 text-sm font-semibold text-[#10201a] transition hover:brightness-110"
+                  onClick={startNewRecipe}
+                  title="Add recipe"
+                  type="button"
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  Add
+                </button>
+              ) : (
+                <span className="rounded-md border border-[#3b463f] px-2 py-1 text-xs text-[var(--muted)]">
+                  View mode
+                </span>
+              )}
             </div>
 
             <label className="mb-3 flex h-11 items-center gap-2 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--muted)]">
@@ -1998,6 +2164,7 @@ export default function RecipeWorkspace() {
           <PintRulesPanel />
 
           <RecipeToolsPanel
+            canImport={canManageRecipes}
             customItem={customShoppingItem}
             filteredRecipes={filteredRecipes}
             onAddCustomItem={addCustomShoppingItem}
@@ -2133,6 +2300,7 @@ export default function RecipeWorkspace() {
             <>
               {creamiOfTheDay && (
                 <CreamiOfTheDayCard
+                  canManage={canManageRecipes}
                   onEdit={() => startEditing(creamiOfTheDay)}
                   onSelect={() => selectRecipe(creamiOfTheDay.id)}
                   recipe={creamiOfTheDay}
@@ -2140,6 +2308,7 @@ export default function RecipeWorkspace() {
               )}
               <RecipeDetail
                 busy={busy}
+                canManage={canManageRecipes}
                 experimentForm={experimentForm}
                 onDelete={() => deleteRecipe(selectedRecipe)}
                 onDeleteReview={deleteReview}
@@ -2147,6 +2316,7 @@ export default function RecipeWorkspace() {
                   deleteExperiment(selectedRecipe, experimentId)
                 }
                 onEdit={() => startEditing(selectedRecipe)}
+                onCancelReviewEdit={cancelEditingReview}
                 onExperimentChange={setExperimentForm}
                 onExperimentSubmit={submitExperiment}
                 onMakeAgain={() => markMadeAgain(selectedRecipe)}
@@ -2156,8 +2326,11 @@ export default function RecipeWorkspace() {
                 }
                 onRemovePhoto={(stage) => removePhoto(selectedRecipe, stage)}
                 onReviewChange={setReviewForm}
+                onReviewEditChange={setReviewEditForm}
+                onReviewEditSubmit={saveReviewEdit}
                 onReviewSubmit={submitReview}
                 onSelectVersion={selectRecipe}
+                onStartReviewEdit={startEditingReview}
                 onToggleApproved={() =>
                   toggleRecipeField(selectedRecipe, "family_approved")
                 }
@@ -2179,6 +2352,8 @@ export default function RecipeWorkspace() {
                 }
                 recipe={selectedRecipe}
                 reviewAverage={selectedReviewAverage}
+                reviewEditForm={reviewEditForm}
+                reviewEditingId={editingReviewId}
                 reviewForm={reviewForm}
                 reviews={selectedReviews}
                 scaleMultiplier={scaleMultiplier}
@@ -2194,7 +2369,8 @@ export default function RecipeWorkspace() {
               />
               <h2 className="text-xl font-semibold">No recipes yet</h2>
               <button
-                className="mt-5 inline-flex h-11 items-center gap-2 rounded-md bg-[var(--mint)] px-4 text-sm font-semibold text-[#10201a] transition hover:brightness-110"
+                className="mt-5 inline-flex h-11 items-center gap-2 rounded-md bg-[var(--mint)] px-4 text-sm font-semibold text-[#10201a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!canManageRecipes}
                 onClick={startNewRecipe}
                 type="button"
               >
@@ -2204,7 +2380,7 @@ export default function RecipeWorkspace() {
             </div>
           )}
 
-          {editing && (
+          {editing && canManageRecipes && (
             <RecipeEditor
               busy={busy === "recipe"}
               form={editing}
@@ -2260,6 +2436,7 @@ function PintRulesPanel() {
 }
 
 function RecipeToolsPanel({
+  canImport,
   customItem,
   filteredRecipes,
   onAddCustomItem,
@@ -2272,6 +2449,7 @@ function RecipeToolsPanel({
   onRemoveChecked,
   shoppingItems,
 }: {
+  canImport: boolean;
   customItem: string;
   filteredRecipes: Recipe[];
   onAddCustomItem: () => void;
@@ -2374,16 +2552,18 @@ function RecipeToolsPanel({
             <Download size={15} aria-hidden="true" />
             Export JSON
           </button>
-          <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm transition hover:border-[var(--mint)]">
-            <Upload size={15} aria-hidden="true" />
-            Import JSON
-            <input
-              accept="application/json"
-              className="sr-only"
-              onChange={onImport}
-              type="file"
-            />
-          </label>
+          {canImport && (
+            <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm transition hover:border-[var(--mint)]">
+              <Upload size={15} aria-hidden="true" />
+              Import JSON
+              <input
+                accept="application/json"
+                className="sr-only"
+                onChange={onImport}
+                type="file"
+              />
+            </label>
+          )}
         </div>
       </div>
     </section>
@@ -2499,7 +2679,7 @@ function CreamiSettingsPanel({
   onEdit,
   recipe,
 }: {
-  onEdit: () => void;
+  onEdit?: () => void;
   recipe: Recipe;
 }) {
   return (
@@ -2525,6 +2705,7 @@ function CreamiSettingsPanel({
 
 function PhotoGalleryPanel({
   busy,
+  canManage,
   onRemoveLabeledPhoto,
   onRemovePhoto,
   onUploadLabeledPhoto,
@@ -2532,6 +2713,7 @@ function PhotoGalleryPanel({
   recipe,
 }: {
   busy: string;
+  canManage: boolean;
   onRemoveLabeledPhoto: (label: string) => void;
   onRemovePhoto: (stage: "before" | "after") => void;
   onUploadLabeledPhoto: (
@@ -2550,6 +2732,7 @@ function PhotoGalleryPanel({
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <PhotoSlot
           busy={busy === `${recipe.id}-before` || busy === recipe.id}
+          canManage={canManage}
           imageUrl={recipe.photo_before_url}
           label="Before spin"
           onRemove={() => onRemovePhoto("before")}
@@ -2557,6 +2740,7 @@ function PhotoGalleryPanel({
         />
         <PhotoSlot
           busy={busy === `${recipe.id}-after` || busy === recipe.id}
+          canManage={canManage}
           imageUrl={recipe.photo_after_url}
           label="After spin"
           onRemove={() => onRemovePhoto("after")}
@@ -2568,6 +2752,7 @@ function PhotoGalleryPanel({
           return (
             <PhotoSlot
               busy={busy === `${recipe.id}-${label}` || busy === recipe.id}
+              canManage={canManage}
               imageUrl={photo?.url ?? null}
               key={label}
               label={label}
@@ -2583,6 +2768,7 @@ function PhotoGalleryPanel({
 
 function ExperimentPanel({
   busy,
+  canManage,
   form,
   onChange,
   onDelete,
@@ -2590,6 +2776,7 @@ function ExperimentPanel({
   recipe,
 }: {
   busy: boolean;
+  canManage: boolean;
   form: ExperimentForm;
   onChange: (form: ExperimentForm) => void;
   onDelete: (experimentId: string) => void;
@@ -2604,98 +2791,104 @@ function ExperimentPanel({
           Experiment log
         </h3>
       </div>
-      <form
-        className="grid min-w-0 gap-3 rounded-md border border-[#28322d] bg-[#101411] p-3 md:grid-cols-2"
-        onSubmit={onSubmit}
-      >
-        <Field label="Date">
-          <input
-            className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
-            onChange={(event) => onChange({ ...form, date: event.target.value })}
-            type="date"
-            value={form.date}
-          />
-        </Field>
-        <Field label="What changed">
-          <input
-            className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
-            onChange={(event) =>
-              onChange({ ...form, what_changed: event.target.value })
-            }
-            value={form.what_changed}
-          />
-        </Field>
-        <Field label="Why I changed it">
-          <input
-            className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
-            onChange={(event) =>
-              onChange({ ...form, why_changed: event.target.value })
-            }
-            value={form.why_changed}
-          />
-        </Field>
-        <Field label="Result">
-          <input
-            className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
-            onChange={(event) => onChange({ ...form, result: event.target.value })}
-            value={form.result}
-          />
-        </Field>
-        <Field label="Texture notes">
-          <input
-            className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
-            onChange={(event) =>
-              onChange({ ...form, texture_notes: event.target.value })
-            }
-            value={form.texture_notes}
-          />
-        </Field>
-        <Field label="Flavor notes">
-          <input
-            className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
-            onChange={(event) =>
-              onChange({ ...form, flavor_notes: event.target.value })
-            }
-            value={form.flavor_notes}
-          />
-        </Field>
-        <Field label="Sweetness notes">
-          <input
-            className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
-            onChange={(event) =>
-              onChange({ ...form, sweetness_notes: event.target.value })
-            }
-            value={form.sweetness_notes}
-          />
-        </Field>
-        <Field label="Family reaction">
-          <input
-            className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
-            onChange={(event) =>
-              onChange({ ...form, family_reaction: event.target.value })
-            }
-            value={form.family_reaction}
-          />
-        </Field>
-        <label className="flex min-w-0 items-center gap-2 text-sm text-[var(--muted)]">
-          <input
-            checked={form.would_repeat}
-            onChange={(event) =>
-              onChange({ ...form, would_repeat: event.target.checked })
-            }
-            type="checkbox"
-          />
-          Would repeat this change
-        </label>
-        <button
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[var(--mint)] px-4 text-sm font-semibold text-[#10201a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={busy}
-          type="submit"
+      {canManage && (
+        <form
+          className="grid min-w-0 gap-3 rounded-md border border-[#28322d] bg-[#101411] p-3 md:grid-cols-2"
+          onSubmit={onSubmit}
         >
-          <Plus size={16} aria-hidden="true" />
-          Save experiment
-        </button>
-      </form>
+          <Field label="Date">
+            <input
+              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
+              onChange={(event) =>
+                onChange({ ...form, date: event.target.value })
+              }
+              type="date"
+              value={form.date}
+            />
+          </Field>
+          <Field label="What changed">
+            <input
+              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
+              onChange={(event) =>
+                onChange({ ...form, what_changed: event.target.value })
+              }
+              value={form.what_changed}
+            />
+          </Field>
+          <Field label="Why I changed it">
+            <input
+              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
+              onChange={(event) =>
+                onChange({ ...form, why_changed: event.target.value })
+              }
+              value={form.why_changed}
+            />
+          </Field>
+          <Field label="Result">
+            <input
+              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
+              onChange={(event) =>
+                onChange({ ...form, result: event.target.value })
+              }
+              value={form.result}
+            />
+          </Field>
+          <Field label="Texture notes">
+            <input
+              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
+              onChange={(event) =>
+                onChange({ ...form, texture_notes: event.target.value })
+              }
+              value={form.texture_notes}
+            />
+          </Field>
+          <Field label="Flavor notes">
+            <input
+              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
+              onChange={(event) =>
+                onChange({ ...form, flavor_notes: event.target.value })
+              }
+              value={form.flavor_notes}
+            />
+          </Field>
+          <Field label="Sweetness notes">
+            <input
+              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
+              onChange={(event) =>
+                onChange({ ...form, sweetness_notes: event.target.value })
+              }
+              value={form.sweetness_notes}
+            />
+          </Field>
+          <Field label="Family reaction">
+            <input
+              className="h-10 w-full rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm"
+              onChange={(event) =>
+                onChange({ ...form, family_reaction: event.target.value })
+              }
+              value={form.family_reaction}
+            />
+          </Field>
+          <label className="flex min-w-0 items-center gap-2 text-sm text-[var(--muted)]">
+            <input
+              checked={form.would_repeat}
+              onChange={(event) =>
+                onChange({ ...form, would_repeat: event.target.checked })
+              }
+              type="checkbox"
+            />
+            Would repeat this change
+          </label>
+          <button
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[var(--mint)] px-4 text-sm font-semibold text-[#10201a] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busy}
+            type="submit"
+          >
+            <Plus size={16} aria-hidden="true" />
+            Save experiment
+          </button>
+        </form>
+      )}
       <div className="mt-4 space-y-3">
         {recipe.experiments.length ? (
           recipe.experiments.map((experiment) => (
@@ -2712,14 +2905,16 @@ function ExperimentPanel({
                     {experiment.date || "No date"}
                   </p>
                 </div>
-                <button
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--berry)] hover:text-[#ffd5dc]"
-                  onClick={() => onDelete(experiment.id)}
-                  title="Remove experiment"
-                  type="button"
-                >
-                  <Trash2 size={14} aria-hidden="true" />
-                </button>
+                {canManage && (
+                  <button
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--berry)] hover:text-[#ffd5dc]"
+                    onClick={() => onDelete(experiment.id)}
+                    title="Remove experiment"
+                    type="button"
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                  </button>
+                )}
               </div>
               <p className="mt-3 break-words text-sm leading-6">
                 {experiment.result || "No result logged."}
@@ -2870,10 +3065,12 @@ function VisitorRatingSummary({
 }
 
 function CreamiOfTheDayCard({
+  canManage,
   onEdit,
   onSelect,
   recipe,
 }: {
+  canManage: boolean;
   onEdit: () => void;
   onSelect: () => void;
   recipe: Recipe;
@@ -2908,14 +3105,16 @@ function CreamiOfTheDayCard({
             <Sparkles size={16} aria-hidden="true" />
             View
           </button>
-          <button
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--mint)] px-3 text-sm font-semibold text-[#10201a] transition hover:brightness-110"
-            onClick={onEdit}
-            type="button"
-          >
-            <Edit3 size={16} aria-hidden="true" />
-            Edit
-          </button>
+          {canManage && (
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-[var(--mint)] px-3 text-sm font-semibold text-[#10201a] transition hover:brightness-110"
+              onClick={onEdit}
+              type="button"
+            >
+              <Edit3 size={16} aria-hidden="true" />
+              Edit
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -2943,11 +3142,13 @@ function TagRow({ tags }: { tags: string[] }) {
 
 function RecipeDetail({
   busy,
+  canManage,
   experimentForm,
   onDelete,
   onDeleteExperiment,
   onDeleteReview,
   onEdit,
+  onCancelReviewEdit,
   onExperimentChange,
   onExperimentSubmit,
   onMakeAgain,
@@ -2955,6 +3156,8 @@ function RecipeDetail({
   onRemoveLabeledPhoto,
   onRemovePhoto,
   onReviewChange,
+  onReviewEditChange,
+  onReviewEditSubmit,
   onReviewSubmit,
   onScaleChange,
   onSelectVersion,
@@ -2962,21 +3165,26 @@ function RecipeDetail({
   onToggleFavorite,
   onToggleTested,
   onToggleWouldMakeAgain,
+  onStartReviewEdit,
   onUploadLabeledPhoto,
   onUploadPhoto,
   recipe,
   reviewAverage,
+  reviewEditForm,
+  reviewEditingId,
   reviewForm,
   reviews,
   scaleMultiplier,
   versionRecipes,
 }: {
   busy: string;
+  canManage: boolean;
   experimentForm: ExperimentForm;
   onDelete: () => void;
   onDeleteExperiment: (experimentId: string) => void;
   onDeleteReview: (review: RecipeReview) => void;
   onEdit: () => void;
+  onCancelReviewEdit: () => void;
   onExperimentChange: (form: ExperimentForm) => void;
   onExperimentSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onMakeAgain: () => void;
@@ -2984,6 +3192,8 @@ function RecipeDetail({
   onRemoveLabeledPhoto: (label: string) => void;
   onRemovePhoto: (stage: "before" | "after") => void;
   onReviewChange: (form: ReviewForm) => void;
+  onReviewEditChange: (form: ReviewForm) => void;
+  onReviewEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onReviewSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onScaleChange: (value: string) => void;
   onSelectVersion: (recipeId: string) => void;
@@ -2991,6 +3201,7 @@ function RecipeDetail({
   onToggleFavorite: () => void;
   onToggleTested: () => void;
   onToggleWouldMakeAgain: () => void;
+  onStartReviewEdit: (review: RecipeReview) => void;
   onUploadLabeledPhoto: (
     label: string,
     event: ChangeEvent<HTMLInputElement>,
@@ -3001,6 +3212,8 @@ function RecipeDetail({
   ) => void;
   recipe: Recipe;
   reviewAverage: number | null;
+  reviewEditForm: ReviewForm;
+  reviewEditingId: string;
   reviewForm: ReviewForm;
   reviews: RecipeReview[];
   scaleMultiplier: string;
@@ -3076,77 +3289,81 @@ function RecipeDetail({
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--amber)] sm:flex-none"
-                onClick={onNewVersion}
-                title="Duplicate as a new version"
-                type="button"
-              >
-                <Copy size={16} aria-hidden="true" />
-                Duplicate version
-              </button>
-              <button
-                className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)] sm:flex-none"
-                onClick={onMakeAgain}
-                title="Mark made today"
-                type="button"
-              >
-                <RefreshCw size={16} aria-hidden="true" />
-                Make again
-              </button>
-              <button
-                className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)] sm:flex-none"
-                onClick={onEdit}
-                title="Edit recipe"
-                type="button"
-              >
-                <Edit3 size={16} aria-hidden="true" />
-                Edit
-              </button>
-              <button
-                className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[#5c353a] px-3 text-sm text-[#ffd5dc] transition hover:border-[var(--berry)] sm:flex-none"
-                onClick={onDelete}
-                title="Delete recipe"
-                type="button"
-              >
-                <Trash2 size={16} aria-hidden="true" />
-                Delete
-              </button>
-            </div>
+            {canManage && (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--amber)] sm:flex-none"
+                    onClick={onNewVersion}
+                    title="Duplicate as a new version"
+                    type="button"
+                  >
+                    <Copy size={16} aria-hidden="true" />
+                    Duplicate version
+                  </button>
+                  <button
+                    className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)] sm:flex-none"
+                    onClick={onMakeAgain}
+                    title="Mark made today"
+                    type="button"
+                  >
+                    <RefreshCw size={16} aria-hidden="true" />
+                    Make again
+                  </button>
+                  <button
+                    className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)] sm:flex-none"
+                    onClick={onEdit}
+                    title="Edit recipe"
+                    type="button"
+                  >
+                    <Edit3 size={16} aria-hidden="true" />
+                    Edit
+                  </button>
+                  <button
+                    className="inline-flex h-10 min-w-fit flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[#5c353a] px-3 text-sm text-[#ffd5dc] transition hover:border-[var(--berry)] sm:flex-none"
+                    onClick={onDelete}
+                    title="Delete recipe"
+                    type="button"
+                  >
+                    <Trash2 size={16} aria-hidden="true" />
+                    Delete
+                  </button>
+                </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
-              <ToggleButton
-                active={recipe.favorite}
-                icon={<Heart size={15} />}
-                label="Favorite"
-                onClick={onToggleFavorite}
-              />
-              <ToggleButton
-                active={recipe.family_approved}
-                icon={<BadgeCheck size={15} />}
-                label="Family approved"
-                onClick={onToggleApproved}
-              />
-              <ToggleButton
-                active={recipe.tested}
-                icon={<FlaskConical size={15} />}
-                label="Tested"
-                onClick={onToggleTested}
-              />
-              <ToggleButton
-                active={recipe.would_make_again}
-                icon={<RefreshCw size={15} />}
-                label="Would make again"
-                onClick={onToggleWouldMakeAgain}
-              />
-            </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <ToggleButton
+                    active={recipe.favorite}
+                    icon={<Heart size={15} />}
+                    label="Favorite"
+                    onClick={onToggleFavorite}
+                  />
+                  <ToggleButton
+                    active={recipe.family_approved}
+                    icon={<BadgeCheck size={15} />}
+                    label="Family approved"
+                    onClick={onToggleApproved}
+                  />
+                  <ToggleButton
+                    active={recipe.tested}
+                    icon={<FlaskConical size={15} />}
+                    label="Tested"
+                    onClick={onToggleTested}
+                  />
+                  <ToggleButton
+                    active={recipe.would_make_again}
+                    icon={<RefreshCw size={15} />}
+                    label="Would make again"
+                    onClick={onToggleWouldMakeAgain}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-        <InfoPanel onEdit={onEdit} title="Ingredients">
+        <InfoPanel onEdit={canManage ? onEdit : undefined} title="Ingredients">
           <ItemList items={recipe.ingredients} />
         </InfoPanel>
         <ScalingPanel
@@ -3154,11 +3371,14 @@ function RecipeDetail({
           multiplier={scaleMultiplier}
           onChange={onScaleChange}
         />
-        <InfoPanel onEdit={onEdit} title="Instructions">
+        <InfoPanel onEdit={canManage ? onEdit : undefined} title="Instructions">
           <StepList items={recipe.instructions} />
         </InfoPanel>
-        <CreamiSettingsPanel onEdit={onEdit} recipe={recipe} />
-        <InfoPanel onEdit={onEdit} title="Mix-ins">
+        <CreamiSettingsPanel
+          onEdit={canManage ? onEdit : undefined}
+          recipe={recipe}
+        />
+        <InfoPanel onEdit={canManage ? onEdit : undefined} title="Mix-ins">
           <p>{recipe.mix_ins || "No mix-ins logged."}</p>
           {recipe.mix_in_amount && (
             <p className="mt-2 text-[var(--muted)]">Amount: {recipe.mix_in_amount}</p>
@@ -3170,7 +3390,7 @@ function RecipeDetail({
             <p className="mt-2">{recipe.mix_in_instructions}</p>
           )}
         </InfoPanel>
-        <InfoPanel onEdit={onEdit} title="Testing results">
+        <InfoPanel onEdit={canManage ? onEdit : undefined} title="Testing results">
           <KeyValueList
             values={[
               ["Difficulty", recipe.difficulty || "Not logged"],
@@ -3181,18 +3401,19 @@ function RecipeDetail({
             ]}
           />
         </InfoPanel>
-        <InfoPanel onEdit={onEdit} title="Recipe versions">
+        <InfoPanel onEdit={canManage ? onEdit : undefined} title="Recipe versions">
           <VersionList
             currentRecipeId={recipe.id}
             onSelect={onSelectVersion}
             recipes={versionRecipes}
           />
         </InfoPanel>
-        <InfoPanel onEdit={onEdit} title="Notes">
+        <InfoPanel onEdit={canManage ? onEdit : undefined} title="Notes">
           <p>{recipe.notes || "No notes yet."}</p>
         </InfoPanel>
         <PhotoGalleryPanel
           busy={busy}
+          canManage={canManage}
           onRemoveLabeledPhoto={onRemoveLabeledPhoto}
           onRemovePhoto={onRemovePhoto}
           onUploadLabeledPhoto={onUploadLabeledPhoto}
@@ -3201,6 +3422,7 @@ function RecipeDetail({
         />
         <ExperimentPanel
           busy={busy === recipe.id}
+          canManage={canManage}
           form={experimentForm}
           onChange={onExperimentChange}
           onDelete={onDeleteExperiment}
@@ -3210,10 +3432,17 @@ function RecipeDetail({
         <ReviewPanel
           busy={busy === "review"}
           deletingReviewId={deletingReviewId}
+          editingReviewId={reviewEditingId}
+          editForm={reviewEditForm}
           form={reviewForm}
+          isEditingBusy={busy === `review-edit:${reviewEditingId}`}
+          onCancelEdit={onCancelReviewEdit}
           onChange={onReviewChange}
           onDeleteReview={onDeleteReview}
+          onEditChange={onReviewEditChange}
+          onEditSubmit={onReviewEditSubmit}
           onSubmit={onReviewSubmit}
+          onStartEdit={onStartReviewEdit}
           reviewAverage={reviewAverage}
           reviews={reviews}
         />
@@ -3271,18 +3500,32 @@ function VersionList({
 function ReviewPanel({
   busy,
   deletingReviewId,
+  editingReviewId,
+  editForm,
   form,
+  isEditingBusy,
+  onCancelEdit,
   onChange,
   onDeleteReview,
+  onEditChange,
+  onEditSubmit,
+  onStartEdit,
   onSubmit,
   reviewAverage,
   reviews,
 }: {
   busy: boolean;
   deletingReviewId: string;
+  editingReviewId: string;
+  editForm: ReviewForm;
   form: ReviewForm;
+  isEditingBusy: boolean;
+  onCancelEdit: () => void;
   onChange: (form: ReviewForm) => void;
   onDeleteReview: (review: RecipeReview) => void;
+  onEditChange: (form: ReviewForm) => void;
+  onEditSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onStartEdit: (review: RecipeReview) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   reviewAverage: number | null;
   reviews: RecipeReview[];
@@ -3377,42 +3620,139 @@ function ReviewPanel({
 
       <div className="mt-4 space-y-3">
         {reviews.length ? (
-          reviews.map((review) => (
-            <article
-              className="min-w-0 rounded-md border border-[#28322d] bg-[#101411] p-3"
-              key={review.id}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 break-words">
-                  <h4 className="break-words text-sm font-semibold">
-                    {review.reviewer_name}
-                  </h4>
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {formatDate(review.created_at)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {review.would_eat_again && (
-                    <StatusBadge text="Would eat again" />
-                  )}
-                  <Rating value={review.rating} compact />
-                  <button
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--berry)] hover:text-[#ffd5dc] disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={deletingReviewId === review.id}
-                    onClick={() => onDeleteReview(review)}
-                    title="Remove review"
-                    type="button"
-                  >
-                    <Trash2 size={14} aria-hidden="true" />
-                    <span className="sr-only">Remove review</span>
-                  </button>
-                </div>
-              </div>
-              <p className="mt-3 break-words text-sm leading-6 text-[#ddd9cf]">
-                {review.notes || "No notes left."}
-              </p>
-            </article>
-          ))
+          reviews.map((review) => {
+            const isEditing = editingReviewId === review.id;
+
+            return (
+              <article
+                className="min-w-0 rounded-md border border-[#28322d] bg-[#101411] p-3"
+                key={review.id}
+              >
+                {isEditing ? (
+                  <form className="grid gap-3" onSubmit={onEditSubmit}>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="block text-sm font-medium text-[var(--muted)]">
+                          Name
+                        </span>
+                        <input
+                          className="h-10 w-full min-w-0 rounded-md border border-[var(--line)] bg-[#0f1311] px-3 text-sm text-[var(--foreground)]"
+                          onChange={(event) =>
+                            onEditChange({
+                              ...editForm,
+                              reviewer_name: event.target.value,
+                            })
+                          }
+                          value={editForm.reviewer_name}
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="block text-sm font-medium text-[var(--muted)]">
+                          Rating
+                        </span>
+                        <div className="flex min-h-10 min-w-0 items-center overflow-x-auto rounded-md border border-[var(--line)] bg-[#0f1311] px-1">
+                          <StarRatingControl
+                            disabled={isEditingBusy}
+                            onRate={(rating) =>
+                              onEditChange({
+                                ...editForm,
+                                rating: String(rating),
+                              })
+                            }
+                            value={normalizeRating(editForm.rating)}
+                          />
+                        </div>
+                      </label>
+                    </div>
+                    <label className="space-y-2">
+                      <span className="block text-sm font-medium text-[var(--muted)]">
+                        Notes
+                      </span>
+                      <textarea
+                        className="min-h-20 w-full min-w-0 resize-y rounded-md border border-[var(--line)] bg-[#0f1311] p-3 text-sm leading-6 text-[var(--foreground)]"
+                        onChange={(event) =>
+                          onEditChange({ ...editForm, notes: event.target.value })
+                        }
+                        value={editForm.notes}
+                      />
+                    </label>
+                    <label className="flex min-w-0 items-center gap-2 text-sm text-[var(--muted)]">
+                      <input
+                        checked={editForm.would_eat_again}
+                        onChange={(event) =>
+                          onEditChange({
+                            ...editForm,
+                            would_eat_again: event.target.checked,
+                          })
+                        }
+                        type="checkbox"
+                      />
+                      Would eat again
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[var(--mint)] px-3 text-sm font-semibold text-[#10201a] transition hover:brightness-110 disabled:opacity-60"
+                        disabled={isEditingBusy}
+                        type="submit"
+                      >
+                        <Check size={14} aria-hidden="true" />
+                        {isEditingBusy ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm transition hover:border-[var(--berry)]"
+                        onClick={onCancelEdit}
+                        type="button"
+                      >
+                        <X size={14} aria-hidden="true" />
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 break-words">
+                        <h4 className="break-words text-sm font-semibold">
+                          {review.reviewer_name}
+                        </h4>
+                        <p className="mt-1 text-xs text-[var(--muted)]">
+                          {formatDate(review.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {review.would_eat_again && (
+                          <StatusBadge text="Would eat again" />
+                        )}
+                        <Rating value={review.rating} compact />
+                        <button
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--mint)] hover:text-[var(--foreground)]"
+                          onClick={() => onStartEdit(review)}
+                          title="Edit review"
+                          type="button"
+                        >
+                          <Edit3 size={14} aria-hidden="true" />
+                          <span className="sr-only">Edit review</span>
+                        </button>
+                        <button
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--berry)] hover:text-[#ffd5dc] disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={deletingReviewId === review.id}
+                          onClick={() => onDeleteReview(review)}
+                          title="Remove review"
+                          type="button"
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                          <span className="sr-only">Remove review</span>
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-3 break-words text-sm leading-6 text-[#ddd9cf]">
+                      {review.notes || "No notes left."}
+                    </p>
+                  </>
+                )}
+              </article>
+            );
+          })
         ) : (
           <p className="rounded-md border border-[#28322d] bg-[#101411] p-3 text-sm text-[var(--muted)]">
             No family feedback yet.
@@ -3425,12 +3765,14 @@ function ReviewPanel({
 
 function PhotoSlot({
   busy,
+  canManage,
   imageUrl,
   label,
   onRemove,
   onUpload,
 }: {
   busy: boolean;
+  canManage: boolean;
   imageUrl: string | null;
   label: string;
   onRemove: () => void;
@@ -3443,7 +3785,7 @@ function PhotoSlot({
           <Camera size={15} className="text-[var(--mint)]" aria-hidden="true" />
           {label}
         </div>
-        {imageUrl && (
+        {imageUrl && canManage && (
           <button
             className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:border-[var(--berry)] hover:text-[#ffd5dc]"
             onClick={onRemove}
@@ -3471,17 +3813,19 @@ function PhotoSlot({
         )}
       </div>
 
-      <label className="mt-3 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)]">
-        <ImagePlus size={16} aria-hidden="true" />
-        {busy ? "Saving..." : imageUrl ? "Replace" : "Upload"}
-        <input
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          className="sr-only"
-          disabled={busy}
-          onChange={onUpload}
-          type="file"
-        />
-      </label>
+      {canManage && (
+        <label className="mt-3 inline-flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[var(--line)] px-3 text-sm text-[var(--foreground)] transition hover:border-[var(--mint)]">
+          <ImagePlus size={16} aria-hidden="true" />
+          {busy ? "Saving..." : imageUrl ? "Replace" : "Upload"}
+          <input
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            className="sr-only"
+            disabled={busy}
+            onChange={onUpload}
+            type="file"
+          />
+        </label>
+      )}
     </div>
   );
 }

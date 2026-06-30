@@ -24,6 +24,7 @@ import {
   type Recipe,
   type RecipeReview,
 } from "@/lib/recipes";
+import AdminLogin from "@/components/AdminLogin";
 import { getSupabaseClient } from "@/lib/supabase";
 
 const LOCAL_STORAGE_KEY = "creami-lab-recipes-v2";
@@ -233,6 +234,7 @@ export default function HomeDashboard() {
               <Calculator size={16} aria-hidden="true" />
               Converter
             </Link>
+            <AdminLogin />
           </div>
         </div>
       </section>
