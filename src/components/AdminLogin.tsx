@@ -112,14 +112,17 @@ export default function AdminLogin({
     const { error } = await supabase.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        emailRedirectTo: window.location.href,
+        emailRedirectTo: window.location.origin,
+        shouldCreateUser: false,
       },
     });
 
     setBusy(false);
 
     if (error) {
-      setMessage(error.message);
+      setMessage(
+        `${error.message} Make sure this email exists in Supabase Auth first.`,
+      );
       return;
     }
 
